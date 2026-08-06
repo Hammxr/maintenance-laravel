@@ -16,6 +16,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Caddy terminates TLS in front of the app container, which is only
+        // reachable over the internal Docker network — so every proxy that
+        // can reach us is one we control, and trusting all of them is safe.
+        // Without this Laravel sees plain HTTP and generates http:// URLs,
+        // which breaks Livewire and Filament asset loading under HTTPS.
+        $middleware->trustProxies(at: '*');
+
         $middleware->web(append: [
             SecurityHeaders::class,
             AssignDefaultTeam::class,

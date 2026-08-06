@@ -2,6 +2,7 @@
 .github
 .gitignore
 node_modules
+vendor
 npm-debug.log
 .env
 .env.*
