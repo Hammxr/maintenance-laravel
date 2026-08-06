@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use Laravel\Fortify\Http\Controllers\AuthenticatedSessionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -29,5 +30,9 @@ Route::middleware(['auth'])->get('/dashboard', function () {
 Route::get('/submit-request', [App\Http\Controllers\GuestWorkOrderController::class, 'create'])->name('guest.work-order.create');
 Route::post('/submit-request', [App\Http\Controllers\GuestWorkOrderController::class, 'store'])->middleware('throttle:10,1')->name('guest.work-order.store');
 Route::get('/request-submitted', [App\Http\Controllers\GuestWorkOrderController::class, 'success'])->name('guest.work-order.success');
+
+Route::post('/admin/login', [AuthenticatedSessionController::class, 'store'])
+    ->middleware(['web'])
+    ->name('admin.login.store');
 
 require __DIR__.'/socialstream.php';

@@ -41,6 +41,12 @@ class TaskResource extends Resource
             ->components([
                 TextInput::make('name')->label('Name'),
                 Textarea::make('description')->label('Description'),
+                Select::make('equipment_id')
+                    ->relationship('equipment', 'name')
+                    ->label('Equipment')
+                    ->searchable()
+                    ->preload()
+                    ->helperText('Set this when the task is maintenance performed on a piece of equipment — it\'s what lets this task show up on the Unplanned Maintenance report.'),
                 DatePicker::make('due_date')->label('Due Date'),
                 Select::make('status')
                     ->options([
@@ -82,19 +88,46 @@ class TaskResource extends Resource
             ->columns([
                 TextColumn::make('name')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->placeholder('—'),
                 TextColumn::make('description')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->limit(50),
+                TextColumn::make('equipment.name')
+                    ->label('Equipment')
+                    ->searchable()
+                    ->sortable()
+                    ->placeholder('—'),
                 TextColumn::make('due_date')
-                    ->searchable()
+                    ->date()
                     ->sortable(),
-                TextColumn::make('status'),
-                TextColumn::make('contact_id'),
-                TextColumn::make('company_id')
+                TextColumn::make('status')
+                    ->badge()
+                    ->color(fn (?string $state) => match ($state) {
+                        'completed' => 'success',
+                        'in_progress' => 'warning',
+                        'cancelled' => 'danger',
+                        default => 'gray',
+                    }),
+                TextColumn::make('completed_at')
+                    ->label('Completed')
+                    ->dateTime()
+                    ->sortable()
+                    ->placeholder('—'),
+                TextColumn::make('contact.name')
+                    ->label('Contact')
                     ->searchable()
-                    ->sortable(),
-                TextColumn::make('opportunity_id'),
+                    ->sortable()
+                    ->placeholder('—'),
+                TextColumn::make('company.name')
+                    ->label('Company')
+                    ->searchable()
+                    ->sortable()
+                    ->placeholder('—'),
+                TextColumn::make('opportunity.stage')
+                    ->label('Opportunity')
+                    ->placeholder('—'),
             ])
             ->filters([
                 //

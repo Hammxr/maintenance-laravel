@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 #[\Illuminate\Database\Eloquent\Attributes\Fillable([
     'name',
@@ -21,6 +23,8 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
     'status',
     'criticality',
     'notes',
+    'current_hours',
+    'current_hours_recorded_at',
     'company_id',
     'team_id',
     'sensor_enabled',
@@ -31,7 +35,33 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 ])]
 class Equipment extends Model
 {
-    use HasFactory;
+    use HasFactory, LogsActivity;
+
+    /**
+     * Feeds the "Change Log" report — logs only the fields a technician
+     * would meaningfully edit, and only when they actually changed, so the
+     * log doesn't fill up with noise from unrelated timestamp touches.
+     */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('equipment')
+            ->logOnly([
+                'name',
+                'description',
+                'serial_number',
+                'model',
+                'manufacturer',
+                'category',
+                'location',
+                'status',
+                'criticality',
+                'notes',
+                'current_hours',
+            ])
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
+    }
 
     /**
      * The relationships that should be eagerly loaded.
@@ -193,6 +223,25 @@ class Equipment extends Model
     }
 
     /**
+     * Update this equipment's current operating-hour reading and
+     * immediately re-check its hour-based maintenance schedules, so a
+     * schedule that just became overdue gets its work order pushed right
+     * away rather than waiting for the next daily check.
+     *
+     * @return array<int, \App\Models\WorkOrder> Any work orders created as a result.
+     */
+    public function updateCurrentHours(int $hours): array
+    {
+        $this->update([
+            'current_hours' => $hours,
+            'current_hours_recorded_at' => now(),
+        ]);
+
+        return app(\App\Services\MaintenanceSchedulingService::class)
+            ->checkSchedulesForEquipment($this);
+    }
+
+    /**
      * Automatically update equipment status based on work orders
      */
     public function syncStatusWithWorkOrders(): void
@@ -247,6 +296,8 @@ class Equipment extends Model
             'sensor_enabled' => 'boolean',
             'sensor_config' => 'array',
             'last_sensor_reading_at' => 'datetime',
+            'current_hours' => 'integer',
+            'current_hours_recorded_at' => 'datetime',
         ];
     }
 }

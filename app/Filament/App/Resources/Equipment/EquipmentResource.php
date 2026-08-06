@@ -93,6 +93,12 @@ class EquipmentResource extends Resource
                             ])
                             ->default('medium')
                             ->required(),
+                        TextInput::make('current_hours')
+                            ->label('Current Operating Hours')
+                            ->numeric()
+                            ->minValue(0)
+                            ->suffix('hrs')
+                            ->helperText('Update this whenever you take a meter reading — hour-based maintenance schedules use it to know when they\'re due.'),
                     ])->columns(2),
 
                 Section::make('Purchase Information')
@@ -180,6 +186,11 @@ class EquipmentResource extends Resource
                         'danger' => 'high',
                         'danger' => 'critical',
                     ]),
+                TextColumn::make('current_hours')
+                    ->label('Hours')
+                    ->suffix(' hrs')
+                    ->placeholder('—')
+                    ->sortable(),
                 TextColumn::make('manufacturer')
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),

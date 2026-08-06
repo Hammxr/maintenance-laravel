@@ -41,6 +41,24 @@ class MaintenanceScheduleResource extends Resource
     #[\Override]
     protected static ?int $navigationSort = 1;
 
+    /**
+     * Technicians should only see maintenance schedules assigned to them —
+     * other technicians' schedules don't exist as far as they're concerned.
+     * This scoping applies to both the list/table and to resolving a single
+     * record for the edit page.
+     */
+    #[\Override]
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        if (auth()->user()?->hasRole('technician')) {
+            $query->where('assigned_to', auth()->id());
+        }
+
+        return $query;
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema

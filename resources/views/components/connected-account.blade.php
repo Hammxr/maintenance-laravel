@@ -6,16 +6,16 @@
             <x-socialstream-icons.provider-icon :provider="$provider['id']" class="h-6 w-6" />
 
             <div class="ml-2">
-                <div class="text-sm font-semibold text-gray-600">
+                <div class="text-sm font-semibold text-white">
                     {{ __($provider['name']) }}
                 </div>
 
                 @if (! empty($createdAt))
-                    <div class="text-xs text-gray-500">
+                    <div class="text-xs text-white">
                         {{ __('Connected :createdAt', ['createdAt' => $createdAt]) }}
                     </div>
                 @else
-                    <div class="text-xs text-gray-500">
+                    <div class="text-xs text-white">
                         {{ __('Not connected.') }}
                     </div>
                 @endif

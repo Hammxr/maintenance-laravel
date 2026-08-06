@@ -47,6 +47,7 @@ class AppPanelProvider extends PanelProvider
             ->passwordReset()
             ->emailVerification()
             ->viteTheme('resources/css/filament/app/theme.css')
+            ->darkMode(false)
             ->colors([
                 'primary' => Color::hex('#0f766e'), // Deep teal for primary actions
                 'secondary' => Color::hex('#059669'), // Emerald for secondary elements
@@ -57,8 +58,8 @@ class AppPanelProvider extends PanelProvider
                 'gray' => Color::hex('#64748b'), // Balanced gray for neutral elements
                 'accent' => Color::hex('#7c3aed'), // Purple accent for highlights
             ])
-            ->brandName('Liberu Maintenance')
-            ->brandLogo(asset('images/logo.svg'))
+            ->brandName('Republic Lifestyle')
+            ->brandLogo(asset('images/logo.png'))
             ->brandLogoHeight('2rem')
             ->favicon(asset('images/favicon.ico'))
             ->navigationGroups([
@@ -83,6 +84,20 @@ class AppPanelProvider extends PanelProvider
                     ->url(fn () => $this->shouldRegisterMenuItem()
                         ? url(EditProfile::getUrl())
                         : url($panel->getPath())),
+                // User management (add/edit/delete technician profiles) lives
+                // on the separate Admin panel at /admin, which isn't linked
+                // from anywhere in this panel's own navigation. Surface it
+                // here so the site administrator can find it, but only for
+                // whoever should actually be managing accounts.
+                MenuItem::make()
+                    ->label('Manage Users')
+                    ->icon('heroicon-o-users')
+                    ->url(fn () => url('/admin/users'))
+                    // Shown to anyone who isn't a technician, rather than
+                    // requiring the super_admin role specifically — that way
+                    // it still shows up for the owner account even before
+                    // roles/permissions have been fully set up.
+                    ->visible(fn () => !(auth()->user()?->hasRole('technician') ?? false)),
             ])
             ->discoverResources(in: app_path('Filament/App/Resources'), for: 'App\\Filament\\App\\Resources')
             ->discoverPages(in: app_path('Filament/App/Pages'), for: 'App\\Filament\\App\\Pages')

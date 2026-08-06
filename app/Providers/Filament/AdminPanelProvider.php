@@ -38,9 +38,31 @@ class AdminPanelProvider extends PanelProvider
             ->login([AuthenticatedSessionController::class, 'create'])
             ->passwordReset()
             ->emailVerification()
-            ->viteTheme('resources/css/filament/admin/theme.css')
+            // Reusing the app panel's own compiled stylesheet (rather than
+            // maintaining a second, separately-styled admin/theme.css)
+            // guarantees this panel always looks identical to the main one,
+            // instead of drifting out of sync the way it had until now.
+            ->viteTheme('resources/css/filament/app/theme.css')
+            ->darkMode(false)
             ->colors([
-                'primary' => Color::Gray,
+                'primary' => Color::hex('#0f766e'),
+                'secondary' => Color::hex('#059669'),
+                'success' => Color::hex('#16a34a'),
+                'warning' => Color::hex('#ea580c'),
+                'danger' => Color::hex('#dc2626'),
+                'info' => Color::hex('#0284c7'),
+                'gray' => Color::hex('#64748b'),
+                'accent' => Color::hex('#7c3aed'),
+            ])
+            ->brandName('Republic Lifestyle')
+            ->brandLogo(asset('images/logo.png'))
+            ->brandLogoHeight('2rem')
+            ->favicon(asset('images/favicon.ico'))
+            ->userMenuItems([
+                MenuItem::make()
+                    ->label('Back to Main Site')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->url(fn () => url('/app')),
             ])
             ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\\Filament\\Admin\\Resources')
             ->discoverPages(in: app_path('Filament/Admin/Pages'), for: 'App\\Filament\\Admin\\Pages')

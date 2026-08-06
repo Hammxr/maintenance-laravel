@@ -86,7 +86,7 @@ class InventoryPartResource extends Resource
                     ->schema([
                         TextInput::make('unit_cost')
                             ->numeric()
-                            ->prefix('$')
+                            ->prefix('R')
                             ->default(0)
                             ->step(0.01),
                         TextInput::make('reorder_level')
@@ -168,7 +168,7 @@ class InventoryPartResource extends Resource
                     ->label('Available')
                     ->getStateUsing(fn ($record) => $record->available_quantity),
                 TextColumn::make('unit_cost')
-                    ->money('USD')
+                    ->money('ZAR')
                     ->sortable(),
                 TextColumn::make('location')
                     ->searchable()

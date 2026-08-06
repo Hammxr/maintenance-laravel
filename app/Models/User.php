@@ -1,19 +1,16 @@
 <?php
-
 namespace App\Models;
-
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use JoelButcher\Socialstream\HasConnectedAccounts;
 use JoelButcher\Socialstream\SetsProfilePhotoFromUrl;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Jetstream\HasProfilePhoto;
+use Laravel\Jetstream\HasTeams;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
-
 class User extends Authenticatable
 {
     use HasApiTokens;
@@ -22,11 +19,13 @@ class User extends Authenticatable
     use HasProfilePhoto {
         HasProfilePhoto::profilePhotoUrl as getPhotoUrl;
     }
-    use HasRoles;
+    use HasRoles, HasTeams {
+    	HasTeams::teams insteadof HasRoles;
+    	HasRoles::teams as permissionTeams;
+}
     use Notifiable;
     use SetsProfilePhotoFromUrl;
     use TwoFactorAuthenticatable;
-
     /**
      * The attributes that are mass assignable.
      *
@@ -38,7 +37,6 @@ class User extends Authenticatable
         'password',
         'current_team_id',
     ];
-
     /**
      * The attributes that should be hidden for arrays.
      *
@@ -50,7 +48,6 @@ class User extends Authenticatable
         'two_factor_recovery_codes',
         'two_factor_secret',
     ];
-
     /**
      * The accessors to append to the model's array form.
      *
@@ -59,7 +56,6 @@ class User extends Authenticatable
     protected $appends = [
         'profile_photo_url',
     ];
-
     /**
      * Get the attributes that should be cast.
      *
@@ -71,15 +67,6 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
         ];
     }
-
-    /**
-     * The team the user is currently viewing.
-     */
-    public function currentTeam(): BelongsTo
-    {
-        return $this->belongsTo(Team::class, 'current_team_id');
-    }
-
     /**
      * Get the URL to the user's profile photo.
      */

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\WorkOrder;
 use App\Models\Equipment;
 use App\Models\MaintenanceSchedule;
+use App\Models\Task;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -203,11 +204,14 @@ class MaintenanceReportService
             ->when($teamId, fn($q) => $q->where('team_id', $teamId))
             ->whereNotNull('assigned_to');
 
-        if ($startDate instanceof \Carbon\Carbon) {
-            $query->where('submitted_at', '>=', $startDate);
-        }
-        if ($endDate instanceof \Carbon\Carbon) {
-            $query->where('submitted_at', '<=', $endDate);
+        // Include a work order if it was either submitted or completed within
+        // the period, so work actually performed (completed) in the window is
+        // never excluded just because it was originally submitted earlier.
+        if ($startDate instanceof \Carbon\Carbon && $endDate instanceof \Carbon\Carbon) {
+            $query->where(function ($q) use ($startDate, $endDate) {
+                $q->whereBetween('submitted_at', [$startDate, $endDate])
+                    ->orWhereBetween('completed_at', [$startDate, $endDate]);
+            });
         }
 
         $workOrders = $query->with('assignedTo')->get();
@@ -317,9 +321,140 @@ class MaintenanceReportService
             'cost_analysis' => $this->generateCostAnalysis($teamId, $startDate, $endDate),
             'equipment_performance' => $this->getEquipmentPerformanceMetrics($teamId, $startDate, $endDate),
             'technician_performance' => $this->getTechnicianPerformanceMetrics($teamId, $startDate, $endDate),
+            'maintenance_log' => $this->getMaintenanceLog($teamId, $startDate, $endDate),
             'trends' => $this->analyzeMaintenanceTrends($teamId, $startDate->diffInDays($endDate)),
             'actionable_insights' => $this->generateActionableInsights($teamId, $startDate, $endDate),
         ];
+    }
+
+    /**
+     * Get a per-task log of maintenance actually performed in the period:
+     * one entry per completed work order that's linked to a maintenance
+     * schedule, showing that schedule's own name and description — i.e.
+     * exactly what was typed into the "Name" and "Description" fields when
+     * the maintenance schedule was created — plus when it was done and
+     * which technician did it.
+     *
+     * Deliberately never falls back to the work order's own title/
+     * description: those describe the fault/issue that was reported (e.g.
+     * "projector displaying distorted colors"), not the maintenance task
+     * itself, and mixing the two in is exactly what this report should not
+     * do. Work orders with no linked schedule are excluded entirely, since
+     * there's no schedule name/description to show for them.
+     *
+     * @param int|null $teamId
+     * @param Carbon $startDate
+     * @param Carbon $endDate
+     * @return array<int, array{title: string, description: ?string, equipment_name: ?string, performed_at: ?\Carbon\Carbon, technician_name: string}>
+     */
+    public function getMaintenanceLog(?int $teamId, Carbon $startDate, Carbon $endDate): array
+    {
+        $workOrders = WorkOrder::query()
+            ->when($teamId, fn($q) => $q->where('team_id', $teamId))
+            ->whereNotNull('completed_at')
+            ->whereNotNull('maintenance_schedule_id')
+            ->where('completed_at', '>=', $startDate)
+            ->where('completed_at', '<=', $endDate)
+            ->with(['maintenanceSchedule', 'assignedTo', 'equipment'])
+            ->orderBy('completed_at')
+            ->get()
+            ->filter(fn (WorkOrder $workOrder) => $workOrder->maintenanceSchedule !== null);
+
+        return $workOrders->map(function (WorkOrder $workOrder) {
+            $schedule = $workOrder->maintenanceSchedule;
+
+            return [
+                'title' => $schedule->name,
+                'description' => $schedule->description,
+                'equipment_name' => $workOrder->equipment?->name,
+                'performed_at' => $workOrder->completed_at,
+                'technician_name' => $workOrder->assignedTo?->name ?? 'Unassigned',
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * Get a log of unplanned maintenance performed in the period — tasks
+     * completed against a specific piece of equipment (as opposed to
+     * scheduled preventive maintenance, which comes from getMaintenanceLog()
+     * above). A task only counts here once it's been marked completed AND
+     * has equipment attached; general CRM to-dos with no equipment_id never
+     * show up in this report.
+     *
+     * @param int|null $teamId
+     * @param Carbon $startDate
+     * @param Carbon $endDate
+     * @return array<int, array{title: string, description: ?string, equipment_name: ?string, performed_at: ?\Carbon\Carbon, technician_name: string}>
+     */
+    public function getUnplannedMaintenanceLog(?int $teamId, Carbon $startDate, Carbon $endDate): array
+    {
+        $tasks = Task::query()
+            ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
+            ->whereNotNull('equipment_id')
+            ->whereNotNull('completed_at')
+            ->where('status', 'completed')
+            ->where('completed_at', '>=', $startDate)
+            ->where('completed_at', '<=', $endDate)
+            ->with(['equipment', 'assignedUser'])
+            ->orderBy('completed_at')
+            ->get();
+
+        return $tasks->map(function (Task $task) {
+            return [
+                'title' => $task->name ?: 'Unplanned Maintenance',
+                'description' => $task->description,
+                'equipment_name' => $task->equipment?->name,
+                'performed_at' => $task->completed_at,
+                'technician_name' => $task->assignedUser?->name ?? 'Unassigned',
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * Get every currently-due maintenance schedule — by calendar date or by
+     * equipment operating hours, using exactly the same isDue() check the
+     * automatic work-order generator uses, so "what's overdue on this
+     * report" and "what would trigger a new work order" can never disagree.
+     *
+     * Unlike the completed-maintenance log, this isn't scoped to a date
+     * range: overdue is inherently a snapshot of right now, not a period.
+     *
+     * @param int|null $teamId
+     * @return array<int, array{title: string, description: ?string, equipment_name: ?string, technician_name: string, overdue_summary: string}>
+     */
+    public function getOverdueMaintenance(?int $teamId = null): array
+    {
+        $schedules = MaintenanceSchedule::active()
+            ->when($teamId, fn($q) => $q->where('team_id', $teamId))
+            ->with(['equipment', 'assignedUser'])
+            ->get()
+            ->filter(fn (MaintenanceSchedule $schedule) => $schedule->isDue());
+
+        return $schedules->map(function (MaintenanceSchedule $schedule) {
+            if ($schedule->frequency_type === 'hours') {
+                // We only know the equipment's hours as of the last time
+                // someone recorded a reading, not the exact moment it
+                // crossed the threshold — so "since when" here means "as of
+                // this reading", not a precise overdue start date.
+                $recordedAt = $schedule->equipment?->current_hours_recorded_at;
+
+                $overdueSummary = $schedule->hoursOverdueBy() . ' hours overdue'
+                    . ($recordedAt ? ' as of the reading on ' . $recordedAt->format('M j, Y') : '')
+                    . ' (currently at ' . $schedule->equipment?->current_hours . ' hrs; due every ' . $schedule->frequency_value . ' hrs)';
+            } else {
+                $daysOverdue = (int) $schedule->next_due_date->diffInDays(now());
+                $overdueSummary = 'Overdue since ' . $schedule->next_due_date->format('M j, Y')
+                    . ' (' . $daysOverdue . ' ' . str('day')->plural($daysOverdue) . ')';
+            }
+
+            return [
+                'title' => $schedule->name,
+                'description' => $schedule->description,
+                'equipment_name' => $schedule->equipment?->name,
+                'technician_name' => $schedule->assignedUser?->name ?? 'Unassigned',
+                'overdue_summary' => $overdueSummary,
+            ];
+        })->values()->all();
     }
 
     /**
