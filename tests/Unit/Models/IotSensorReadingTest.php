@@ -17,6 +17,7 @@ class IotSensorReadingTest extends TestCase
     {
         $fillable = [
             'equipment_id',
+            'team_id',
             'sensor_type',
             'metric_name',
             'value',

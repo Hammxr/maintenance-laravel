@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[\Illuminate\Database\Eloquent\Attributes\Fillable([
     'equipment_id',
+    'team_id',
     'sensor_type',
     'metric_name',
     'value',
@@ -20,9 +21,27 @@ class IotSensorReading extends Model
 {
     use HasFactory;
 
+    /**
+     * Inherit the owning team from the equipment when a reading is ingested
+     * outside a Filament panel, e.g. from the sensor API.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (self $reading): void {
+            if ($reading->team_id === null) {
+                $reading->team_id = $reading->equipment?->team_id;
+            }
+        });
+    }
+
     public function equipment(): BelongsTo
     {
         return $this->belongsTo(Equipment::class);
+    }
+
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
     }
 
     /**

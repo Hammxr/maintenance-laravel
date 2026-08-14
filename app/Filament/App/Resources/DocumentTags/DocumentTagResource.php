@@ -48,7 +48,8 @@ class DocumentTagResource extends Resource
                     ->required()
                     ->maxLength(255)
                     ->label('Tag Name')
-                    ->unique(ignoreRecord: true),
+                    // Matches the unique(['team_id', 'name']) database index.
+                    ->scopedUnique(ignoreRecord: true),
                 Textarea::make('description')
                     ->rows(3)
                     ->label('Description'),

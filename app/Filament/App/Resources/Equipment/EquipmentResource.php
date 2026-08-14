@@ -51,7 +51,12 @@ class EquipmentResource extends Resource
                         Textarea::make('description')
                             ->rows(3),
                         TextInput::make('serial_number')
-                            ->unique(ignoreRecord: true)
+                            // Laravel's `unique` rule ignores global scopes, so
+                            // it would report a clash against another team's
+                            // equipment. `sensor_id` below stays globally
+                            // unique because the ingestion API looks up
+                            // equipment by it across all teams.
+                            ->scopedUnique(ignoreRecord: true)
                             ->maxLength(255),
                         TextInput::make('model')
                             ->maxLength(255),

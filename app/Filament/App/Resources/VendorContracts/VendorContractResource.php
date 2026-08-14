@@ -65,7 +65,7 @@ class VendorContractResource extends Resource
                         TextInput::make('contract_number')
                             ->label('Contract Number')
                             ->required()
-                            ->unique(ignoreRecord: true)
+                            ->scopedUnique(ignoreRecord: true)
                             ->maxLength(255),
                         TextInput::make('title')
                             ->label('Title')
