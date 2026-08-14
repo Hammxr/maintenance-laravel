@@ -6,6 +6,7 @@ namespace Tests\Feature\Livewire;
 
 use App\Filament\App\Resources\Equipment\Pages\CreateEquipment;
 use App\Filament\App\Resources\Equipment\Pages\ListEquipment;
+use App\Filament\App\Resources\LineLeaders\Pages\CreateLineLeader;
 use App\Filament\App\Resources\LineLeaders\Pages\ListLineLeaders;
 use App\Models\Equipment;
 use App\Models\LineLeader;
@@ -153,6 +154,37 @@ class EquipmentLineLeaderTest extends TestCase
                 return array_key_exists($ours->id, $options)
                     && ! array_key_exists($theirs->id, $options);
             });
+    }
+
+    /**
+     * Regression: a line leader created from its own screen used to get a null
+     * team_id, because Filament does not associate the panel tenant with new
+     * records in this app. It was created successfully and then never appeared
+     * in the tenant-scoped dropdown or filter — usable nowhere.
+     */
+    #[Test]
+    public function a_line_leader_created_from_its_own_page_belongs_to_the_current_team(): void
+    {
+        Livewire::test(CreateLineLeader::class)
+            ->fillForm(['name' => 'Line 1 Leader'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('line_leaders', [
+            'name' => 'Line 1 Leader',
+            'team_id' => $this->team->id,
+        ]);
+    }
+
+    #[Test]
+    public function the_line_leaders_list_only_shows_the_current_teams_leaders(): void
+    {
+        $ours = LineLeader::create(['name' => 'Our Leader', 'team_id' => $this->team->id]);
+        $theirs = LineLeader::create(['name' => 'Their Leader', 'team_id' => Team::factory()->create()->id]);
+
+        Livewire::test(ListLineLeaders::class)
+            ->assertCanSeeTableRecords([$ours])
+            ->assertCanNotSeeTableRecords([$theirs]);
     }
 
     #[Test]

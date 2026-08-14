@@ -17,6 +17,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class LineLeaderResource extends Resource
 {
@@ -75,6 +76,19 @@ class LineLeaderResource extends Resource
                 ]),
             ])
             ->defaultSort('name');
+    }
+
+    /**
+     * Scoped by hand for the same reason the equipment form's Select is:
+     * Filament's panel tenancy does not scope resource queries in this app,
+     * so without this the management screen would list every team's line
+     * leaders while the equipment dropdown showed only this team's.
+     */
+    #[\Override]
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->where('team_id', Filament::getTenant()?->id);
     }
 
     public static function getPages(): array
