@@ -135,6 +135,19 @@ class MaintenanceSchedule extends Model
             return $this->next_due_date;
         }
 
+        // A schedule that has never been completed hasn't finished a cycle,
+        // so there is no new one to calculate — the next_due_date already on
+        // it is the first-service date somebody deliberately chose. Measuring
+        // an interval from now() instead would silently overwrite that with
+        // "a full interval from today", and push it further out on every
+        // call. Same principle as the 'hours' branch above and the default
+        // arm below: with no cycle to advance, keep the date we have.
+        if ($this->last_completed_date === null && $this->next_due_date !== null) {
+            return $this->next_due_date;
+        }
+
+        // Nothing to preserve (never completed and no due date set), so now()
+        // is the only sensible base to seed a first date from.
         $from = $this->last_completed_date ?? now();
 
         return match ($this->frequency_type) {

@@ -162,6 +162,29 @@ class MaintenanceScheduleTest extends TestCase
         );
     }
 
+    /**
+     * Defensive branch: maintenance_schedules.next_due_date is NOT NULL, so a
+     * persisted schedule always has a date to preserve. Only an unsaved
+     * instance can reach the now() fallback.
+     */
+    #[Test]
+    public function calculate_next_due_date_falls_back_to_now_when_there_is_no_date_to_preserve(): void
+    {
+        $schedule = MaintenanceSchedule::factory()->make([
+            'frequency_type'      => 'daily',
+            'frequency_value'     => 7,
+            'next_due_date'       => null,
+            'last_completed_date' => null,
+        ]);
+
+        $nextDueDate = $schedule->calculateNextDueDate();
+
+        $this->assertEquals(
+            now()->addDays(7)->format('Y-m-d'),
+            $nextDueDate->format('Y-m-d')
+        );
+    }
+
     #[Test]
     public function calculate_next_due_date_adds_frequency_when_completed(): void
     {
