@@ -12,6 +12,16 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
+        // Automatically create work orders for maintenance schedules that
+        // have come due (calendar-based, plus a safety-net re-check of
+        // hour-based ones — those are also checked immediately whenever an
+        // equipment's hours reading is updated).
+        $schedule->command('maintenance:generate-work-orders')
+            ->dailyAt('06:00')
+            ->timezone('UTC')
+            ->name('Generate work orders for due maintenance schedules')
+            ->withoutOverlapping();
+
         // Check for overdue and upcoming maintenance daily at 8 AM
         $schedule->command('maintenance:check-due --days=7')
             ->dailyAt('08:00')

@@ -17,6 +17,13 @@ class CreateWorkOrder extends CreateRecord
     {
         $data['submitted_at'] = now();
 
+        // A technician creating their own work order (e.g. reporting a fault
+        // they've spotted) should automatically be the assignee, otherwise
+        // it would immediately vanish from their own scoped view.
+        if (empty($data['assigned_to']) && auth()->user()?->hasRole('technician')) {
+            $data['assigned_to'] = auth()->id();
+        }
+
         return $data;
     }
 }

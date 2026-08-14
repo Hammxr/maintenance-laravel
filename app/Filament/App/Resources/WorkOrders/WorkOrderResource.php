@@ -11,6 +11,7 @@ use App\Filament\App\Resources\WorkOrders\WorkOrderResource\Pages\ListWorkOrders
 use App\Filament\App\Resources\WorkOrders\WorkOrderResource\Pages\CreateWorkOrder;
 use App\Filament\App\Resources\WorkOrders\WorkOrderResource\Pages\EditWorkOrder;
 use App\Filament\App\Resources\WorkOrders\WorkOrderResource\Pages;
+use App\Filament\App\Resources\WorkOrders\WorkOrderResource\RelationManagers;
 use App\Models\WorkOrder;
 use App\Models\Equipment;
 use App\Models\MaintenanceSchedule;
@@ -49,6 +50,25 @@ class WorkOrderResource extends Resource
 
     #[\Override]
     protected static ?int $navigationSort = 1;
+
+    /**
+     * Technicians should only ever see work orders assigned to them — other
+     * technicians' work orders don't exist as far as they're concerned. This
+     * scoping applies both to the list/table and to resolving a single
+     * record for the edit page, so a technician can't view or edit someone
+     * else's work order even by guessing the URL.
+     */
+    #[\Override]
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        if (auth()->user()?->hasRole('technician')) {
+            $query->where('assigned_to', auth()->id());
+        }
+
+        return $query;
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -452,11 +472,48 @@ class WorkOrderResource extends Resource
                     })
                     ->visible(fn (WorkOrder $record) => $record->status === 'approved'),
 
-                Action::make('complete')
+                Action::make('performed')
+                    ->label('Performed')
                     ->icon('heroicon-o-check-badge')
                     ->color('success')
-                    ->action(function (WorkOrder $record) {
-                        $record->update(['status' => 'completed']);
+                    ->schema(function (WorkOrder $record) {
+                        // Only ask for an hours reading if this task belongs
+                        // to an hour-based maintenance schedule — no point
+                        // prompting for it otherwise.
+                        if ($record->maintenanceSchedule?->frequency_type !== 'hours') {
+                            return [];
+                        }
+
+                        return [
+                            TextInput::make('current_hours')
+                                ->label('Current Equipment Hours')
+                                ->numeric()
+                                ->minValue(0)
+                                ->required()
+                                ->default($record->equipment?->current_hours)
+                                ->helperText('Enter the meter reading at the time this was performed — this resets the countdown to the next service.'),
+                        ];
+                    })
+                    ->action(function (WorkOrder $record, array $data) {
+                        $completedAt = now();
+
+                        $record->update([
+                            'status' => 'completed',
+                            'completed_at' => $completedAt,
+                        ]);
+
+                        $currentHours = isset($data['current_hours']) ? (int) $data['current_hours'] : null;
+
+                        if ($currentHours !== null && $record->equipment) {
+                            $record->equipment->update(['current_hours' => $currentHours]);
+                        }
+
+                        // This is what actually advances the schedule to its
+                        // next cycle (or, for hour-based ones, resets the
+                        // baseline hours to measure the next interval from)
+                        // and is what makes this work order show up in the
+                        // "Maintenance Performed" section of the report.
+                        $record->maintenanceSchedule?->markCompleted($completedAt, $currentHours);
                     })
                     ->visible(fn (WorkOrder $record) => $record->status === 'in_progress'),
 

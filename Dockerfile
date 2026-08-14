@@ -67,6 +67,7 @@ ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/relea
 RUN apk update && \
     apk upgrade && \
     apk add --no-cache \
+    bash \
     curl \
     wget \
     nano \
@@ -136,6 +137,11 @@ COPY --chown=${USER}:${USER} . .
 RUN composer dump-autoload --classmap-authoritative --no-dev && \
     composer clear-cache
 
+RUN php artisan octane:install --server=roadrunner --no-interaction
+
+# Automatically fetches and bundles the Roadrunner binary every rebuild 
+# RUN php artisan octane:install --server=roadrunner --no-interaction
+
 # Create necessary Laravel directories
 RUN mkdir -p \
     storage/framework/sessions \
@@ -143,8 +149,9 @@ RUN mkdir -p \
     storage/framework/cache \
     storage/framework/testing \
     storage/logs \
-    bootstrap/cache && \
-    chmod -R a+rw storage
+    bootstrap/cache \
+    /tmp/opcache-file-cache && \
+    chmod -R a+rw storage /tmp/opcache-file-cache
 
 # Copy configuration files
 COPY --chown=${USER}:${USER} .docker/supervisord.conf /etc/supervisor/
@@ -155,11 +162,12 @@ COPY --chown=${USER}:${USER} .docker/supervisord.scheduler.conf /etc/supervisor/
 COPY --chown=${USER}:${USER} .docker/supervisord.worker.conf /etc/supervisor/conf.d/
 COPY --chown=${USER}:${USER} .docker/php.ini ${PHP_INI_DIR}/conf.d/99-octane.ini
 COPY --chown=${USER}:${USER} .docker/start-container /usr/local/bin/start-container
+COPY --chown=${USER}:${USER} .docker/healthcheck /usr/local/bin/healthcheck
 
 # Copy environment file
 COPY --chown=${USER}:${USER} .env.example ./.env
 
-RUN chmod +x /usr/local/bin/start-container && \
+RUN chmod +x /usr/local/bin/start-container /usr/local/bin/healthcheck && \
     cat .docker/utilities.sh >> ~/.bashrc
 
 EXPOSE 8000

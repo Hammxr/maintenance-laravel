@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             // Core system seeders
             PermissionsSeeder::class,
             RolesSeeder::class,
+            TechnicianRoleSeeder::class,
             MenuSeeder::class,
 //            SiteSettingsSeeder::class,
 

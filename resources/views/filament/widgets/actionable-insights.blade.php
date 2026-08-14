@@ -61,7 +61,7 @@
                 </div>
                 <div class="rounded-lg border border-gray-200 bg-white p-4">
                     <dt class="text-sm font-medium text-gray-500">Total Maintenance Cost</dt>
-                    <dd class="mt-1 text-3xl font-semibold text-gray-900">${{ number_format($costAnalysis['total_cost'], 2) }}</dd>
+                    <dd class="mt-1 text-3xl font-semibold text-gray-900">R{{ number_format($costAnalysis['total_cost'], 2) }}</dd>
                 </div>
             </div>
         </div>

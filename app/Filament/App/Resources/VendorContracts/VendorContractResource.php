@@ -102,16 +102,17 @@ class VendorContractResource extends Resource
                         TextInput::make('contract_value')
                             ->label('Contract Value')
                             ->numeric()
-                            ->prefix('$')
+                            ->prefix('R')
                             ->maxValue(9999999.99),
                         Select::make('currency')
                             ->label('Currency')
                             ->options([
+                                'ZAR' => 'ZAR',
                                 'USD' => 'USD',
                                 'EUR' => 'EUR',
                                 'GBP' => 'GBP',
                             ])
-                            ->default('USD')
+                            ->default('ZAR')
                             ->required(),
                         Select::make('payment_frequency')
                             ->label('Payment Frequency')
@@ -195,7 +196,7 @@ class VendorContractResource extends Resource
                     ->sortable(),
                 TextColumn::make('contract_value')
                     ->label('Value')
-                    ->money('USD')
+                    ->money('ZAR')
                     ->sortable(),
                 TextColumn::make('start_date')
                     ->date()

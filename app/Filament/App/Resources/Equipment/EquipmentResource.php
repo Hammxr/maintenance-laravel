@@ -2,26 +2,27 @@
 
 namespace App\Filament\App\Resources\Equipment;
 
-use Filament\Schemas\Schema;
-use Filament\Actions\EditAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use App\Filament\App\Resources\Equipment\Pages\ListEquipment;
 use App\Filament\App\Resources\Equipment\Pages\CreateEquipment;
 use App\Filament\App\Resources\Equipment\Pages\EditEquipment;
-use Filament\Forms;
+use App\Filament\App\Resources\Equipment\Pages\ListEquipment;
 use App\Models\Equipment;
-use Filament\Tables;
-use Filament\Tables\Table;
-use Filament\Resources\Resource;
-use Filament\Schemas\Components\Section;
+use App\Models\LineLeader;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Facades\Filament;
+use Filament\Forms;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\DatePicker;
+use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\BadgeColumn;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 class EquipmentResource extends Resource
@@ -30,10 +31,10 @@ class EquipmentResource extends Resource
     protected static ?string $model = Equipment::class;
 
     #[\Override]
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-wrench-screwdriver';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-wrench-screwdriver';
 
     #[\Override]
-    protected static string | \UnitEnum | null $navigationGroup = 'Asset Management';
+    protected static string|\UnitEnum|null $navigationGroup = 'Asset Management';
 
     #[\Override]
     protected static ?int $navigationSort = 1;
@@ -98,6 +99,45 @@ class EquipmentResource extends Resource
                             ])
                             ->default('medium')
                             ->required(),
+                        TextInput::make('current_hours')
+                            ->label('Current Operating Hours')
+                            ->numeric()
+                            ->minValue(0)
+                            ->suffix('hrs')
+                            ->helperText('Update this whenever you take a meter reading — hour-based maintenance schedules use it to know when they\'re due.'),
+                        Select::make('line_leader_id')
+                            ->label('Line Leader')
+                            // Scoped to the current tenant by hand: Filament
+                            // doesn't apply tenancy to a Select's relationship
+                            // query, so without this you'd see every team's
+                            // line leaders in the dropdown.
+                            ->relationship(
+                                name: 'lineLeader',
+                                titleAttribute: 'name',
+                                modifyQueryUsing: fn (Builder $query) => $query
+                                    ->where('team_id', Filament::getTenant()?->id)
+                                    ->orderBy('name'),
+                            )
+                            ->searchable()
+                            ->preload()
+                            ->placeholder('Not assigned')
+                            ->helperText('Optional — leave blank if this equipment isn\'t filed under a line leader.')
+                            ->createOptionForm([
+                                TextInput::make('name')
+                                    ->required()
+                                    ->maxLength(255),
+                                TextInput::make('notes')
+                                    ->maxLength(255)
+                                    ->helperText('Optional, e.g. which line or area they cover.'),
+                            ])
+                            // Same reason as above — the tenant has to be set
+                            // explicitly or an inline-created line leader would
+                            // be orphaned and invisible to the filter.
+                            ->createOptionUsing(fn (array $data): int => LineLeader::create([
+                                'name' => $data['name'],
+                                'notes' => $data['notes'] ?? null,
+                                'team_id' => Filament::getTenant()?->id,
+                            ])->getKey()),
                     ])->columns(2),
 
                 Section::make('Purchase Information')
@@ -116,7 +156,7 @@ class EquipmentResource extends Resource
                             ->label('Enable IoT Sensor')
                             ->reactive()
                             ->helperText('Enable real-time monitoring for this equipment'),
-                        
+
                         Select::make('sensor_type')
                             ->label('Sensor Type')
                             ->options([
@@ -130,13 +170,13 @@ class EquipmentResource extends Resource
                             ])
                             ->searchable()
                             ->visible(fn ($get) => $get('sensor_enabled')),
-                        
+
                         TextInput::make('sensor_id')
                             ->label('Sensor ID')
                             ->unique(ignoreRecord: true)
                             ->helperText('Unique identifier for the IoT sensor')
                             ->visible(fn ($get) => $get('sensor_enabled')),
-                        
+
                         Forms\Components\KeyValue::make('sensor_config')
                             ->label('Sensor Configuration')
                             ->helperText('Configure thresholds and sensor parameters (JSON format)')
@@ -156,7 +196,7 @@ class EquipmentResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['company:company_id,name', 'team:id,name']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['company:company_id,name', 'team:id,name', 'lineLeader:id,name']))
             ->columns([
                 TextColumn::make('name')
                     ->searchable()
@@ -171,6 +211,12 @@ class EquipmentResource extends Resource
                 TextColumn::make('location')
                     ->searchable()
                     ->sortable(),
+                TextColumn::make('lineLeader.name')
+                    ->label('Line Leader')
+                    ->placeholder('—')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
                 BadgeColumn::make('status')
                     ->colors([
                         'success' => 'active',
@@ -185,6 +231,11 @@ class EquipmentResource extends Resource
                         'danger' => 'high',
                         'danger' => 'critical',
                     ]),
+                TextColumn::make('current_hours')
+                    ->label('Hours')
+                    ->suffix(' hrs')
+                    ->placeholder('—')
+                    ->sortable(),
                 TextColumn::make('manufacturer')
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -203,7 +254,7 @@ class EquipmentResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                
+
                 BadgeColumn::make('sensor_enabled')
                     ->label('IoT Sensor')
                     ->formatStateUsing(fn ($state) => $state ? 'Enabled' : 'Disabled')
@@ -213,12 +264,12 @@ class EquipmentResource extends Resource
                     ])
                     ->icon(fn ($state) => $state ? 'heroicon-o-signal' : null)
                     ->toggleable(),
-                
+
                 TextColumn::make('sensor_type')
                     ->label('Sensor Type')
                     ->badge()
                     ->toggleable(isToggledHiddenByDefault: true),
-                
+
                 TextColumn::make('last_sensor_reading_at')
                     ->label('Last Sensor Reading')
                     ->dateTime()
@@ -251,6 +302,17 @@ class EquipmentResource extends Resource
                         'Vehicles' => 'Vehicles',
                         'Other' => 'Other',
                     ]),
+                SelectFilter::make('line_leader_id')
+                    ->label('Line Leader')
+                    ->relationship(
+                        name: 'lineLeader',
+                        titleAttribute: 'name',
+                        modifyQueryUsing: fn (Builder $query) => $query
+                            ->where('team_id', Filament::getTenant()?->id)
+                            ->orderBy('name'),
+                    )
+                    ->searchable()
+                    ->preload(),
             ])
             ->recordActions([
                 EditAction::make(),

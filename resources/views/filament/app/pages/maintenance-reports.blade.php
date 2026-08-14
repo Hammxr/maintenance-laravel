@@ -8,10 +8,27 @@
             </x-filament::button>
 
             @if($reportData)
+                <x-filament::button color="danger" wire:click="exportPdf">
+                    Export PDF
+                </x-filament::button>
+
                 <x-filament::button color="success" wire:click="exportCsv">
                     Export CSV
                 </x-filament::button>
             @endif
+
+            {{-- Overdue maintenance is a snapshot of right now, not tied to
+                 the date range above, so this works independently of
+                 generating the period report first. --}}
+            <x-filament::button color="warning" wire:click="exportOverduePdf">
+                Export Overdue PDF
+            </x-filament::button>
+
+            {{-- Unplanned maintenance uses the same date range selected
+                 above, but doesn't require clicking "Generate Report" first. --}}
+            <x-filament::button color="info" wire:click="exportUnplannedPdf">
+                Export Unplanned Maintenance PDF
+            </x-filament::button>
         </div>
     </form>
 
@@ -31,17 +48,17 @@
 
                     <div class="rounded-lg border border-gray-200 bg-white p-4">
                         <dt class="text-sm font-medium text-gray-500">Total Cost</dt>
-                        <dd class="mt-1 text-3xl font-semibold text-gray-900">${{ number_format($reportData['cost_analysis']['total_cost'], 2) }}</dd>
+                        <dd class="mt-1 text-3xl font-semibold text-gray-900">R{{ number_format($reportData['cost_analysis']['total_cost'], 2) }}</dd>
                     </div>
 
                     <div class="rounded-lg border border-gray-200 bg-white p-4">
                         <dt class="text-sm font-medium text-gray-500">Parts Cost</dt>
-                        <dd class="mt-1 text-3xl font-semibold text-gray-900">${{ number_format($reportData['cost_analysis']['parts_cost'], 2) }}</dd>
+                        <dd class="mt-1 text-3xl font-semibold text-gray-900">R{{ number_format($reportData['cost_analysis']['parts_cost'], 2) }}</dd>
                     </div>
 
                     <div class="rounded-lg border border-gray-200 bg-white p-4">
                         <dt class="text-sm font-medium text-gray-500">Labor Cost</dt>
-                        <dd class="mt-1 text-3xl font-semibold text-gray-900">${{ number_format($reportData['cost_analysis']['labor_cost'], 2) }}</dd>
+                        <dd class="mt-1 text-3xl font-semibold text-gray-900">R{{ number_format($reportData['cost_analysis']['labor_cost'], 2) }}</dd>
                     </div>
                 </div>
             </x-filament::section>
@@ -78,7 +95,7 @@
                                             {{ number_format($equipment['uptime_percentage'], 2) }}%
                                         </span>
                                     </td>
-                                    <td class="px-4 py-3 text-sm font-semibold text-gray-900">${{ number_format($equipment['total_cost'], 2) }}</td>
+                                    <td class="px-4 py-3 text-sm font-semibold text-gray-900">R{{ number_format($equipment['total_cost'], 2) }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
