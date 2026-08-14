@@ -38,8 +38,28 @@ return new class extends Migration
         ['table' => 'tasks', 'constraint' => 'tasks_opportunity_id_foreign', 'column' => 'opportunity_id', 'referencesColumn' => 'opportunity_id', 'referencesTable' => 'opportunities'],
     ];
 
+    /**
+     * Everything below is MySQL-specific: `ALTER TABLE ... MODIFY ...
+     * AUTO_INCREMENT` and `DROP FOREIGN KEY` are both MySQL syntax, and
+     * SQLite rejects them outright.
+     *
+     * There is also nothing to fix on SQLite — an INTEGER PRIMARY KEY there is
+     * an alias for the rowid and already auto-increments, which is why these
+     * tables only ever misbehaved against MySQL. Tests run on SQLite
+     * in-memory, so without this guard every migration-backed test in the
+     * suite fails with 'near "MODIFY": syntax error'.
+     */
+    private function isMySql(): bool
+    {
+        return DB::connection()->getDriverName() === 'mysql';
+    }
+
     public function up(): void
     {
+        if (! $this->isMySql()) {
+            return;
+        }
+
         if (Schema::hasTable('tasks') && Schema::hasColumn('tasks', 'task_id')) {
             DB::statement('ALTER TABLE `tasks` MODIFY `task_id` INT NOT NULL AUTO_INCREMENT');
         }
@@ -63,6 +83,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (! $this->isMySql()) {
+            return;
+        }
+
         $this->dropForeignKeys();
 
         if (Schema::hasTable('contacts') && Schema::hasColumn('contacts', 'contact_id')) {
@@ -95,7 +119,7 @@ return new class extends Migration
     {
         foreach ($this->foreignKeys as $fk) {
             DB::statement(
-                "ALTER TABLE `{$fk['table']}` ADD CONSTRAINT `{$fk['constraint']}` " .
+                "ALTER TABLE `{$fk['table']}` ADD CONSTRAINT `{$fk['constraint']}` ".
                 "FOREIGN KEY (`{$fk['column']}`) REFERENCES `{$fk['referencesTable']}` (`{$fk['referencesColumn']}`)"
             );
         }
