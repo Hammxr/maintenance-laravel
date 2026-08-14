@@ -2,15 +2,18 @@
 
 namespace App\Models;
 
+use App\Services\MaintenanceSchedulingService;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
-#[\Illuminate\Database\Eloquent\Attributes\Fillable([
+#[Fillable([
     'name',
     'description',
     'serial_number',
@@ -27,6 +30,7 @@ use Spatie\Activitylog\Support\LogOptions;
     'current_hours_recorded_at',
     'company_id',
     'team_id',
+    'line_leader_id',
     'sensor_enabled',
     'sensor_type',
     'sensor_id',
@@ -58,6 +62,7 @@ class Equipment extends Model
                 'criticality',
                 'notes',
                 'current_hours',
+                'line_leader_id',
             ])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
@@ -97,6 +102,15 @@ class Equipment extends Model
     }
 
     /**
+     * The line leader this equipment is filed under. Optional — not all
+     * equipment belongs to one. Distinct from team(), which is the tenant.
+     */
+    public function lineLeader(): BelongsTo
+    {
+        return $this->belongsTo(LineLeader::class);
+    }
+
+    /**
      * Get all sensor readings for this equipment.
      */
     public function sensorReadings(): HasMany
@@ -124,48 +138,48 @@ class Equipment extends Model
             ->orderBy('reading_time', 'desc');
     }
 
-    #[\Illuminate\Database\Eloquent\Attributes\Scope]
+    #[Scope]
     protected function active($query)
     {
         return $query->where('status', 'active');
     }
 
-    #[\Illuminate\Database\Eloquent\Attributes\Scope]
+    #[Scope]
     protected function inactive($query)
     {
         return $query->where('status', 'inactive');
     }
 
-    #[\Illuminate\Database\Eloquent\Attributes\Scope]
+    #[Scope]
     protected function underMaintenance($query)
     {
         return $query->where('status', 'under_maintenance');
     }
 
-    #[\Illuminate\Database\Eloquent\Attributes\Scope]
+    #[Scope]
     protected function critical($query)
     {
         return $query->where('criticality', 'critical');
     }
 
-    #[\Illuminate\Database\Eloquent\Attributes\Scope]
+    #[Scope]
     protected function high($query)
     {
         return $query->where('criticality', 'high');
     }
 
-    #[\Illuminate\Database\Eloquent\Attributes\Scope]
+    #[Scope]
     protected function sensorEnabled($query)
     {
         return $query->where('sensor_enabled', true);
     }
 
-    #[\Illuminate\Database\Eloquent\Attributes\Scope]
+    #[Scope]
     protected function withCriticalReadings($query)
     {
         return $query->whereHas('sensorReadings', function ($q) {
             $q->where('status', 'critical')
-              ->where('reading_time', '>=', now()->subHours(24));
+                ->where('reading_time', '>=', now()->subHours(24));
         });
     }
 
@@ -174,7 +188,7 @@ class Equipment extends Model
      */
     public function getHealthStatus(): string
     {
-        if (!$this->sensor_enabled) {
+        if (! $this->sensor_enabled) {
             return 'unknown';
         }
 
@@ -219,7 +233,7 @@ class Equipment extends Model
      */
     public function canBeSetToActive(): bool
     {
-        return !$this->hasActiveWorkOrders();
+        return ! $this->hasActiveWorkOrders();
     }
 
     /**
@@ -228,7 +242,7 @@ class Equipment extends Model
      * schedule that just became overdue gets its work order pushed right
      * away rather than waiting for the next daily check.
      *
-     * @return array<int, \App\Models\WorkOrder> Any work orders created as a result.
+     * @return array<int, WorkOrder> Any work orders created as a result.
      */
     public function updateCurrentHours(int $hours): array
     {
@@ -237,7 +251,7 @@ class Equipment extends Model
             'current_hours_recorded_at' => now(),
         ]);
 
-        return app(\App\Services\MaintenanceSchedulingService::class)
+        return app(MaintenanceSchedulingService::class)
             ->checkSchedulesForEquipment($this);
     }
 
@@ -248,7 +262,7 @@ class Equipment extends Model
     {
         if ($this->hasActiveWorkOrders() && $this->status !== 'under_maintenance') {
             $this->update(['status' => 'under_maintenance']);
-        } elseif (!$this->hasActiveWorkOrders() && $this->status === 'under_maintenance') {
+        } elseif (! $this->hasActiveWorkOrders() && $this->status === 'under_maintenance') {
             $this->update(['status' => 'active']);
         }
     }
@@ -256,7 +270,7 @@ class Equipment extends Model
     /**
      * Scope to get equipment with work order counts
      */
-    #[\Illuminate\Database\Eloquent\Attributes\Scope]
+    #[Scope]
     protected function withWorkOrderCounts($query)
     {
         return $query->withCount([
@@ -266,28 +280,29 @@ class Equipment extends Model
             },
             'workOrders as active_work_orders_count' => function ($query) {
                 $query->whereIn('status', ['approved', 'in_progress']);
-            }
+            },
         ]);
     }
 
     /**
      * Scope to get equipment with maintenance schedule counts
      */
-    #[\Illuminate\Database\Eloquent\Attributes\Scope]
+    #[Scope]
     protected function withMaintenanceCounts($query)
     {
         return $query->withCount([
             'maintenanceSchedules',
             'maintenanceSchedules as overdue_schedules_count' => function ($query) {
                 $query->where('next_due_date', '<', now())
-                     ->where('status', 'active');
+                    ->where('status', 'active');
             },
             'maintenanceSchedules as due_soon_schedules_count' => function ($query) {
                 $query->whereBetween('next_due_date', [now(), now()->addDays(7)])
-                     ->where('status', 'active');
-            }
+                    ->where('status', 'active');
+            },
         ]);
     }
+
     protected function casts(): array
     {
         return [
