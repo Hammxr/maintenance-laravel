@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\App\Resources\Equipment\Pages;
 
-use Filament\Actions\DeleteAction;
 use App\Filament\App\Resources\Equipment\EquipmentResource;
 use App\Services\MaintenanceSchedulingService;
-use Filament\Actions;
+use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 
 class EditEquipment extends EditRecord

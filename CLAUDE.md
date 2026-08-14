@@ -62,19 +62,68 @@ docker compose --profile horizon up -d      # optional: horizon, worker, reverb,
 ### Teams are the tenant — this drives almost everything
 
 Jetstream `Team` is registered as the Filament tenant on the app panel
-(`AppPanelProvider::panel()`, `->tenant(Team::class, ownershipRelationship: 'team')`). Nearly
-every domain model carries a `team_id` and is scoped by it. Two middleware make this work, and
-both are easy to miss:
+(`AppPanelProvider::panel()`, `->tenant(Team::class, ownershipRelationship: 'team')`), gated
+behind `Features::hasTeamFeatures()`. Nearly every domain model carries a `team_id`.
+
+**Filament does the scoping and the stamping — don't hand-roll either.** When the panel has
+tenancy, Filament registers two things per resource (see
+`Filament\Resources\Resource\Concerns\BelongsToTenant`):
+
+- a **model-level global scope** that filters every query on that model — including relationship
+  queries behind a form `Select` or a `SelectFilter`, not just resource list queries;
+- a **`creating` hook** that associates the current tenant with new records.
+
+Both are registered when the panel boots, so per-resource `getEloquentQuery()` overrides,
+`modifyFormDataBeforeCreate()` tenant stamping, and `where('team_id', ...)` in a Select's
+`modifyQueryUsing` are all redundant. Panel URLs are `/app/{tenant}/...`; bare `/app` redirects
+to the default tenant.
+
+Because the scoping is a global scope, **Laravel's `unique` and `exists` validation rules bypass
+it** — they would report a clash against another team's record and leak its existence. Use
+Filament's `scopedUnique()` / `scopedExists()` on tenant-owned fields instead. `sensor_id` on
+equipment is a deliberate exception: it stays globally unique because `IotSensorController` looks
+equipment up by it across teams.
+
+Two middleware also matter, and both are easy to miss:
 
 - **`AssignDefaultTeam`** (appended to the `web` group in `bootstrap/app.php`) — if no tenant is
   set for an authenticated user, it falls back to `currentTeam`, then `ownedTeams()->first()`,
-  and creates a personal team if neither exists. Without this, users land with no tenant.
+  and creates a personal team if neither exists.
 - **`TeamsPermission`** — bridges the Filament tenant into spatie/permission's team context via
   `setPermissionsTeamId($team->id)`. **Permission checks silently resolve against the wrong team
   if this hasn't run.** Any new panel, console command or queued job that evaluates permissions
   outside an HTTP request must set the team id itself.
 
-New models representing tenant-owned data need `team_id` in `$fillable` and scoping.
+Queries outside the panel — the API, console commands, queued jobs — are **not** scoped, because
+there's no current panel. They must filter by team themselves.
+
+A new tenant-owned model needs `team_id` in `$fillable` **and** a `team()` `BelongsTo`
+relationship. Filament resolves that relationship name inside the global scope and throws
+`LogicException` if it's missing.
+
+`User` implements `HasTenants` and uses Jetstream's `HasTeams`. Both `HasTeams` and Spatie's
+`HasRoles` declare `teams()`; the collision is resolved in favour of Jetstream's, with Spatie's
+aliased to `permissionTeams`.
+
+**Testing tenancy:** `Filament::setCurrentPanel()` alone is not enough — the global scope and
+`creating` hook are only registered by `Filament::bootCurrentPanel()`. Create fixtures belonging
+to *other* teams **before** calling `Filament::setTenant()`, or the `creating` hook will re-stamp
+them onto the current tenant. See `tests/Feature/PanelTenancyTest.php` and
+`tests/Feature/Livewire/EquipmentLineLeaderTest.php`.
+
+### "Line Leader" is not a team
+
+`Equipment` carries two team-ish columns and they mean different things:
+
+| Column | Meaning |
+|---|---|
+| `team_id` | The **tenant** that owns the record. Scopes every query. Set by Filament. |
+| `line_leader_id` | An **optional grouping label** within one tenant, so technicians can filter equipment by whoever it's filed under. |
+
+Line leaders mirror a filing system the technicians already used off-system. They are a lookup
+table rather than free text (typos would fragment the filter, which is the whole point of the
+field) and deliberately **not** a foreign key to `users` — a line leader doesn't need a login.
+Deleting one nulls `equipment.line_leader_id` rather than cascading.
 
 ### Two Filament panels
 
@@ -174,12 +223,14 @@ production): `CompanySeeder`, `EquipmentSeeder`, `ChecklistSeeder`, `Maintenance
 `UserSeeder` creates `admin@example.com` with a random password printed to stdout, and depends on
 `TeamSeeder` having run (it calls `Team::firstOrFail()`).
 
-### Trusted proxies are not configured
+### There are two TrustProxies, and one is dead code
 
-`app/Http/Middleware/TrustProxies.php` exists but is **dead code** left over from the Laravel 10
-skeleton — there is no `app/Http/Kernel.php`, and `bootstrap/app.php` never registers it. Behind
-a TLS-terminating proxy, add `$middleware->trustProxies(at: '*')` in `bootstrap/app.php` or
-Laravel will generate `http://` URLs and break Livewire/Filament asset loading.
+`bootstrap/app.php` calls `$middleware->trustProxies(at: '*')` — that is the live configuration,
+and it's what stops Laravel generating `http://` URLs behind a TLS-terminating proxy (which
+breaks Livewire and Filament asset loading).
+
+`app/Http/Middleware/TrustProxies.php` is **dead code** left over from the Laravel 10 skeleton.
+There is no `app/Http/Kernel.php` and nothing registers that class. Editing it has no effect.
 
 ## Conventions
 

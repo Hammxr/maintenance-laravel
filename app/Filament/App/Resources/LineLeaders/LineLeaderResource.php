@@ -11,13 +11,11 @@ use App\Models\LineLeader;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Facades\Filament;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 
 class LineLeaderResource extends Resource
 {
@@ -41,10 +39,13 @@ class LineLeaderResource extends Resource
                 TextInput::make('name')
                     ->required()
                     ->maxLength(255)
-                    // Scoped to the tenant, matching the unique index on
-                    // (team_id, name) — two same-named line leaders in one team
-                    // would make the equipment filter ambiguous.
-                    ->unique(ignoreRecord: true, modifyRuleUsing: fn ($rule) => $rule->where('team_id', Filament::getTenant()?->id)),
+                    // Matches the unique index on (team_id, name) — two
+                    // same-named line leaders in one team would make the
+                    // equipment filter ambiguous. Scoped rather than plain
+                    // `unique` because Laravel's rule bypasses global scopes,
+                    // so it would otherwise report a clash against another
+                    // team's line leader and leak its existence.
+                    ->scopedUnique(ignoreRecord: true),
                 TextInput::make('notes')
                     ->maxLength(255)
                     ->helperText('Optional, e.g. which line or area they cover.'),
@@ -76,19 +77,6 @@ class LineLeaderResource extends Resource
                 ]),
             ])
             ->defaultSort('name');
-    }
-
-    /**
-     * Scoped by hand for the same reason the equipment form's Select is:
-     * Filament's panel tenancy does not scope resource queries in this app,
-     * so without this the management screen would list every team's line
-     * leaders while the equipment dropdown showed only this team's.
-     */
-    #[\Override]
-    public static function getEloquentQuery(): Builder
-    {
-        return parent::getEloquentQuery()
-            ->where('team_id', Filament::getTenant()?->id);
     }
 
     public static function getPages(): array

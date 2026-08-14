@@ -6,11 +6,9 @@ use App\Filament\App\Resources\Equipment\Pages\CreateEquipment;
 use App\Filament\App\Resources\Equipment\Pages\EditEquipment;
 use App\Filament\App\Resources\Equipment\Pages\ListEquipment;
 use App\Models\Equipment;
-use App\Models\LineLeader;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -107,16 +105,14 @@ class EquipmentResource extends Resource
                             ->helperText('Update this whenever you take a meter reading — hour-based maintenance schedules use it to know when they\'re due.'),
                         Select::make('line_leader_id')
                             ->label('Line Leader')
-                            // Scoped to the current tenant by hand: Filament
-                            // doesn't apply tenancy to a Select's relationship
-                            // query, so without this you'd see every team's
-                            // line leaders in the dropdown.
+                            // Only ordering here — the panel's tenancy global
+                            // scope on LineLeader already restricts this to the
+                            // current team, and its `creating` hook stamps the
+                            // tenant on anything added through the option form.
                             ->relationship(
                                 name: 'lineLeader',
                                 titleAttribute: 'name',
-                                modifyQueryUsing: fn (Builder $query) => $query
-                                    ->where('team_id', Filament::getTenant()?->id)
-                                    ->orderBy('name'),
+                                modifyQueryUsing: fn (Builder $query) => $query->orderBy('name'),
                             )
                             ->searchable()
                             ->preload()
@@ -129,15 +125,7 @@ class EquipmentResource extends Resource
                                 TextInput::make('notes')
                                     ->maxLength(255)
                                     ->helperText('Optional, e.g. which line or area they cover.'),
-                            ])
-                            // Same reason as above — the tenant has to be set
-                            // explicitly or an inline-created line leader would
-                            // be orphaned and invisible to the filter.
-                            ->createOptionUsing(fn (array $data): int => LineLeader::create([
-                                'name' => $data['name'],
-                                'notes' => $data['notes'] ?? null,
-                                'team_id' => Filament::getTenant()?->id,
-                            ])->getKey()),
+                            ]),
                     ])->columns(2),
 
                 Section::make('Purchase Information')
@@ -307,9 +295,7 @@ class EquipmentResource extends Resource
                     ->relationship(
                         name: 'lineLeader',
                         titleAttribute: 'name',
-                        modifyQueryUsing: fn (Builder $query) => $query
-                            ->where('team_id', Filament::getTenant()?->id)
-                            ->orderBy('name'),
+                        modifyQueryUsing: fn (Builder $query) => $query->orderBy('name'),
                     )
                     ->searchable()
                     ->preload(),
