@@ -239,7 +239,8 @@ precedence over the placeholder `.env` baked into the image.
 | `DB_PASSWORD` | *strong random* | Also set `DB_ROOT_PASSWORD` |
 | `REDIS_HOST` | `redis` | Compose service name |
 | `CACHE_DRIVER` | `redis` | Currently `file` — won't survive Octane restarts cleanly |
-| `SESSION_DRIVER` | `redis` | Currently `file` |
+| `SESSION_DRIVER` | `redis` | Currently `file`. File sessions live **inside the container**, so every restart or redeploy logs everyone out — and an expired session makes Livewire receive the login page instead of JSON, which surfaces as a blank overlay rather than a "please log in" message |
+| `SESSION_LIFETIME` | `480` | Default 120 minutes is too short for a shop-floor tool: a technician who opens a list, goes to the floor for two hours and comes back to hit Save gets the blank-overlay failure above |
 | `QUEUE_CONNECTION` | `redis` | Already correct |
 | `OCTANE_SERVER` | `roadrunner` | **Must not be `swoole`** — the image only installs RoadRunner and only ships the RoadRunner supervisord config |
 | `WITH_HORIZON` | `true` | Queues won't process otherwise |
