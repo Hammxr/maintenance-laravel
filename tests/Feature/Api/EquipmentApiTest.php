@@ -16,6 +16,7 @@ class EquipmentApiTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private Team $team;
 
     protected function setUp(): void
@@ -82,10 +83,9 @@ class EquipmentApiTest extends TestCase
     public function authenticated_user_can_create_equipment(): void
     {
         $payload = [
-            'name'        => 'Test Compressor',
+            'name' => 'Test Compressor',
             'description' => 'A compressor',
-            'category'    => 'Mechanical',
-            'status'      => 'active',
+            'status' => 'active',
             'criticality' => 'high',
         ];
 
@@ -96,7 +96,7 @@ class EquipmentApiTest extends TestCase
             ->assertJsonFragment(['name' => 'Test Compressor']);
 
         $this->assertDatabaseHas('equipment', [
-            'name'    => 'Test Compressor',
+            'name' => 'Test Compressor',
             'team_id' => $this->team->id,
         ]);
     }
@@ -130,7 +130,7 @@ class EquipmentApiTest extends TestCase
     {
         $equipment = Equipment::factory()->create([
             'team_id' => $this->team->id,
-            'name'    => 'My Equipment',
+            'name' => 'My Equipment',
         ]);
 
         $response = $this->actingAs($this->user)
@@ -161,7 +161,7 @@ class EquipmentApiTest extends TestCase
     {
         $equipment = Equipment::factory()->create([
             'team_id' => $this->team->id,
-            'name'    => 'Old Name',
+            'name' => 'Old Name',
         ]);
 
         $response = $this->actingAs($this->user)

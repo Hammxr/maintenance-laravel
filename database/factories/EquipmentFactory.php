@@ -3,12 +3,11 @@
 namespace Database\Factories;
 
 use App\Models\Equipment;
-use App\Models\Company;
 use App\Models\Team;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Equipment>
+ * @extends Factory<Equipment>
  */
 class EquipmentFactory extends Factory
 {
@@ -23,15 +22,10 @@ class EquipmentFactory extends Factory
             'serial_number' => fake()->unique()->bothify('SN-####-????'),
             'model' => fake()->bothify('Model-###'),
             'manufacturer' => fake()->company(),
-            'category' => fake()->randomElement([
-                'HVAC',
-                'Electrical',
-                'Plumbing',
-                'Mechanical',
-                'IT Equipment',
-                'Safety Equipment',
-                'Vehicles',
-            ]),
+            // Categories are a per-team lookup now, so equipment is created
+            // uncategorised by default. Tests that need one should create an
+            // EquipmentCategory and pass equipment_category_id explicitly.
+            'equipment_category_id' => null,
             'location' => fake()->randomElement([
                 'Building A - Floor 1',
                 'Building A - Floor 2',

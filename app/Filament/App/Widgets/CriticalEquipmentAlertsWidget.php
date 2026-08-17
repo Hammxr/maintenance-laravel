@@ -39,8 +39,9 @@ class CriticalEquipmentAlertsWidget extends BaseWidget
                     ->searchable()
                     ->icon('heroicon-m-map-pin'),
 
-                TextColumn::make('category')
+                TextColumn::make('equipmentCategory.name')
                     ->label('Category')
+                    ->placeholder('—')
                     ->badge(),
 
                 BadgeColumn::make('status')

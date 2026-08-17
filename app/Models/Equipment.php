@@ -19,7 +19,7 @@ use Spatie\Activitylog\Support\LogOptions;
     'serial_number',
     'model',
     'manufacturer',
-    'category',
+    'equipment_category_id',
     'location',
     'purchase_date',
     'warranty_expiry',
@@ -56,7 +56,7 @@ class Equipment extends Model
                 'serial_number',
                 'model',
                 'manufacturer',
-                'category',
+                'equipment_category_id',
                 'location',
                 'status',
                 'criticality',
@@ -108,6 +108,16 @@ class Equipment extends Model
     public function lineLeader(): BelongsTo
     {
         return $this->belongsTo(LineLeader::class);
+    }
+
+    /**
+     * What kind of equipment this is. Optional, and drawn from a per-team
+     * lookup rather than a fixed list so each company can name its own
+     * categories.
+     */
+    public function equipmentCategory(): BelongsTo
+    {
+        return $this->belongsTo(EquipmentCategory::class);
     }
 
     /**

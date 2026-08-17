@@ -65,18 +65,24 @@ class EquipmentResource extends Resource
 
                 Section::make('Classification')
                     ->schema([
-                        Select::make('category')
-                            ->options([
-                                'HVAC' => 'HVAC',
-                                'Electrical' => 'Electrical',
-                                'Plumbing' => 'Plumbing',
-                                'Mechanical' => 'Mechanical',
-                                'IT Equipment' => 'IT Equipment',
-                                'Safety Equipment' => 'Safety Equipment',
-                                'Vehicles' => 'Vehicles',
-                                'Other' => 'Other',
-                            ])
-                            ->searchable(),
+                        Select::make('equipment_category_id')
+                            ->label('Category')
+                            // Tenant scoping comes from the panel's global
+                            // scope on EquipmentCategory; only ordering here.
+                            ->relationship(
+                                name: 'equipmentCategory',
+                                titleAttribute: 'name',
+                                modifyQueryUsing: fn (Builder $query) => $query->orderBy('name'),
+                            )
+                            ->searchable()
+                            ->preload()
+                            ->placeholder('Uncategorised')
+                            ->helperText('Add your own via the button beside this field.')
+                            ->createOptionForm([
+                                TextInput::make('name')
+                                    ->required()
+                                    ->maxLength(255),
+                            ]),
                         TextInput::make('location')
                             ->maxLength(255),
                         Select::make('status')
@@ -184,7 +190,7 @@ class EquipmentResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['company:company_id,name', 'team:id,name', 'lineLeader:id,name']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['company:company_id,name', 'team:id,name', 'lineLeader:id,name', 'equipmentCategory:id,name']))
             ->columns([
                 TextColumn::make('name')
                     ->searchable()
@@ -192,8 +198,10 @@ class EquipmentResource extends Resource
                 TextColumn::make('serial_number')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('category')
+                TextColumn::make('equipmentCategory.name')
+                    ->label('Category')
                     ->badge()
+                    ->placeholder('—')
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('location')
@@ -279,17 +287,15 @@ class EquipmentResource extends Resource
                         'high' => 'High',
                         'critical' => 'Critical',
                     ]),
-                SelectFilter::make('category')
-                    ->options([
-                        'HVAC' => 'HVAC',
-                        'Electrical' => 'Electrical',
-                        'Plumbing' => 'Plumbing',
-                        'Mechanical' => 'Mechanical',
-                        'IT Equipment' => 'IT Equipment',
-                        'Safety Equipment' => 'Safety Equipment',
-                        'Vehicles' => 'Vehicles',
-                        'Other' => 'Other',
-                    ]),
+                SelectFilter::make('equipment_category_id')
+                    ->label('Category')
+                    ->relationship(
+                        name: 'equipmentCategory',
+                        titleAttribute: 'name',
+                        modifyQueryUsing: fn (Builder $query) => $query->orderBy('name'),
+                    )
+                    ->searchable()
+                    ->preload(),
                 SelectFilter::make('line_leader_id')
                     ->label('Line Leader')
                     ->relationship(
