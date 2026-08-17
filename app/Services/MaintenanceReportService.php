@@ -2,34 +2,31 @@
 
 namespace App\Services;
 
-use App\Models\WorkOrder;
 use App\Models\Equipment;
 use App\Models\MaintenanceSchedule;
 use App\Models\Task;
-use Illuminate\Support\Facades\DB;
+use App\Models\WorkOrder;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class MaintenanceReportService
 {
     /**
      * Calculate Mean Time To Repair (MTTR) for work orders
-     * 
-     * @param int|null $teamId
-     * @param Carbon|null $startDate
-     * @param Carbon|null $endDate
+     *
      * @return float Average hours to complete work orders
      */
     public function calculateMTTR(?int $teamId = null, ?Carbon $startDate = null, ?Carbon $endDate = null): float
     {
         $query = WorkOrder::query()
-            ->when($teamId, fn($q) => $q->where('team_id', $teamId))
+            ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
             ->whereNotNull('completed_at')
             ->whereNotNull('started_at');
 
-        if ($startDate instanceof \Carbon\Carbon) {
+        if ($startDate instanceof Carbon) {
             $query->where('completed_at', '>=', $startDate);
         }
-        if ($endDate instanceof \Carbon\Carbon) {
+        if ($endDate instanceof Carbon) {
             $query->where('completed_at', '<=', $endDate);
         }
 
@@ -48,10 +45,7 @@ class MaintenanceReportService
 
     /**
      * Calculate equipment uptime percentage
-     * 
-     * @param int $equipmentId
-     * @param Carbon|null $startDate
-     * @param Carbon|null $endDate
+     *
      * @return float Uptime percentage (0-100)
      */
     public function calculateEquipmentUptime(int $equipmentId, ?Carbon $startDate = null, ?Carbon $endDate = null): float
@@ -60,8 +54,11 @@ class MaintenanceReportService
         $endDate = $endDate ?? now();
 
         $totalDays = $startDate->diffInDays($endDate);
-        
-        if ($totalDays === 0) {
+
+        // Compared loosely on purpose: diffInDays() returns a float in Carbon 3,
+        // so a strict `=== 0` never matches 0.0 and the guard would fall through
+        // into a division by zero.
+        if ($totalDays == 0) {
             return 100.0;
         }
 
@@ -74,39 +71,37 @@ class MaintenanceReportService
                     ->orWhereBetween('completed_at', [$startDate, $endDate])
                     ->orWhere(function ($q) use ($startDate, $endDate) {
                         $q->where('started_at', '<=', $startDate)
-                          ->where('completed_at', '>=', $endDate);
+                            ->where('completed_at', '>=', $endDate);
                     });
             })
             ->get()
             ->sum(function ($workOrder) use ($startDate, $endDate) {
                 $start = $workOrder->started_at->max($startDate);
                 $end = $workOrder->completed_at->min($endDate);
+
                 return $start->diffInDays($end);
             });
 
         $uptime = (($totalDays - $maintenanceDays) / $totalDays) * 100;
-        
+
         return round(max(0, min(100, $uptime)), 2);
     }
 
     /**
      * Generate cost analysis for work orders
-     * 
-     * @param int|null $teamId
-     * @param Carbon|null $startDate
-     * @param Carbon|null $endDate
+     *
      * @return array Cost breakdown
      */
     public function generateCostAnalysis(?int $teamId = null, ?Carbon $startDate = null, ?Carbon $endDate = null): array
     {
         $query = WorkOrder::query()
-            ->when($teamId, fn($q) => $q->where('team_id', $teamId))
+            ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
             ->whereNotNull('completed_at');
 
-        if ($startDate instanceof \Carbon\Carbon) {
+        if ($startDate instanceof Carbon) {
             $query->where('completed_at', '>=', $startDate);
         }
-        if ($endDate instanceof \Carbon\Carbon) {
+        if ($endDate instanceof Carbon) {
             $query->where('completed_at', '<=', $endDate);
         }
 
@@ -139,10 +134,7 @@ class MaintenanceReportService
 
     /**
      * Get equipment performance metrics
-     * 
-     * @param int|null $teamId
-     * @param Carbon|null $startDate
-     * @param Carbon|null $endDate
+     *
      * @return array Performance metrics for each equipment
      */
     public function getEquipmentPerformanceMetrics(?int $teamId = null, ?Carbon $startDate = null, ?Carbon $endDate = null): array
@@ -151,7 +143,7 @@ class MaintenanceReportService
         $endDate = $endDate ?? now();
 
         $equipment = Equipment::query()
-            ->when($teamId, fn($q) => $q->where('team_id', $teamId))
+            ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
             ->with(['workOrders' => function ($query) use ($startDate, $endDate) {
                 $query->whereNotNull('completed_at')
                     ->where('completed_at', '>=', $startDate)
@@ -168,6 +160,7 @@ class MaintenanceReportService
                     return ($part->pivot->quantity_used ?? 0) * ($part->pivot->unit_cost ?? 0);
                 });
                 $laborCost = ($wo->actual_hours ?? 0) * 50;
+
                 return $partsCost + $laborCost;
             });
 
@@ -185,29 +178,26 @@ class MaintenanceReportService
         }
 
         // Sort by total cost descending
-        usort($metrics, fn($a, $b) => $b['total_cost'] <=> $a['total_cost']);
+        usort($metrics, fn ($a, $b) => $b['total_cost'] <=> $a['total_cost']);
 
         return $metrics;
     }
 
     /**
      * Get technician performance metrics
-     * 
-     * @param int|null $teamId
-     * @param Carbon|null $startDate
-     * @param Carbon|null $endDate
+     *
      * @return array Performance metrics for each technician
      */
     public function getTechnicianPerformanceMetrics(?int $teamId = null, ?Carbon $startDate = null, ?Carbon $endDate = null): array
     {
         $query = WorkOrder::query()
-            ->when($teamId, fn($q) => $q->where('team_id', $teamId))
+            ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
             ->whereNotNull('assigned_to');
 
         // Include a work order if it was either submitted or completed within
         // the period, so work actually performed (completed) in the window is
         // never excluded just because it was originally submitted earlier.
-        if ($startDate instanceof \Carbon\Carbon && $endDate instanceof \Carbon\Carbon) {
+        if ($startDate instanceof Carbon && $endDate instanceof Carbon) {
             $query->where(function ($q) use ($startDate, $endDate) {
                 $q->whereBetween('submitted_at', [$startDate, $endDate])
                     ->orWhereBetween('completed_at', [$startDate, $endDate]);
@@ -220,7 +210,7 @@ class MaintenanceReportService
 
         foreach ($workOrders->groupBy('assigned_to') as $userId => $userWorkOrders) {
             $technician = $userWorkOrders->first()->assignedTo;
-            if (!$technician) {
+            if (! $technician) {
                 continue;
             }
 
@@ -229,8 +219,8 @@ class MaintenanceReportService
             $completionRate = $total > 0 ? ($completed / $total) * 100 : 0;
 
             $avgCompletionTime = $userWorkOrders
-                ->filter(fn($wo) => $wo->completed_at && $wo->started_at)
-                ->avg(fn($wo) => $wo->started_at->diffInHours($wo->completed_at));
+                ->filter(fn ($wo) => $wo->completed_at && $wo->started_at)
+                ->avg(fn ($wo) => $wo->started_at->diffInHours($wo->completed_at));
 
             $technicianMetrics[] = [
                 'technician_id' => $userId,
@@ -245,16 +235,14 @@ class MaintenanceReportService
         }
 
         // Sort by completion rate descending
-        usort($technicianMetrics, fn($a, $b) => $b['completion_rate'] <=> $a['completion_rate']);
+        usort($technicianMetrics, fn ($a, $b) => $b['completion_rate'] <=> $a['completion_rate']);
 
         return $technicianMetrics;
     }
 
     /**
      * Analyze maintenance trends
-     * 
-     * @param int|null $teamId
-     * @param int $days
+     *
      * @return array Trend data
      */
     public function analyzeMaintenanceTrends(?int $teamId = null, int $days = 90): array
@@ -262,7 +250,7 @@ class MaintenanceReportService
         $startDate = now()->subDays($days);
 
         $workOrders = WorkOrder::query()
-            ->when($teamId, fn($q) => $q->where('team_id', $teamId))
+            ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
             ->where('submitted_at', '>=', $startDate)
             ->select(
                 DB::raw('DATE(submitted_at) as date'),
@@ -277,12 +265,12 @@ class MaintenanceReportService
 
         // Calculate week-over-week change
         $thisWeek = WorkOrder::query()
-            ->when($teamId, fn($q) => $q->where('team_id', $teamId))
+            ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
             ->where('submitted_at', '>=', now()->subDays(7))
             ->count();
 
         $lastWeek = WorkOrder::query()
-            ->when($teamId, fn($q) => $q->where('team_id', $teamId))
+            ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
             ->whereBetween('submitted_at', [now()->subDays(14), now()->subDays(7)])
             ->count();
 
@@ -300,10 +288,7 @@ class MaintenanceReportService
 
     /**
      * Generate comprehensive maintenance report
-     * 
-     * @param int|null $teamId
-     * @param Carbon|null $startDate
-     * @param Carbon|null $endDate
+     *
      * @return array Complete report data
      */
     public function generateComprehensiveReport(?int $teamId = null, ?Carbon $startDate = null, ?Carbon $endDate = null): array
@@ -322,7 +307,11 @@ class MaintenanceReportService
             'equipment_performance' => $this->getEquipmentPerformanceMetrics($teamId, $startDate, $endDate),
             'technician_performance' => $this->getTechnicianPerformanceMetrics($teamId, $startDate, $endDate),
             'maintenance_log' => $this->getMaintenanceLog($teamId, $startDate, $endDate),
-            'trends' => $this->analyzeMaintenanceTrends($teamId, $startDate->diffInDays($endDate)),
+            // Carbon 3's diffInDays() returns a float, and analyzeMaintenanceTrends()
+            // takes an int — passing it straight through raises a PHP 8.5
+            // "implicit conversion from float loses precision" deprecation on
+            // every report.
+            'trends' => $this->analyzeMaintenanceTrends($teamId, (int) $startDate->diffInDays($endDate)),
             'actionable_insights' => $this->generateActionableInsights($teamId, $startDate, $endDate),
         ];
     }
@@ -342,15 +331,12 @@ class MaintenanceReportService
      * do. Work orders with no linked schedule are excluded entirely, since
      * there's no schedule name/description to show for them.
      *
-     * @param int|null $teamId
-     * @param Carbon $startDate
-     * @param Carbon $endDate
-     * @return array<int, array{title: string, description: ?string, equipment_name: ?string, performed_at: ?\Carbon\Carbon, technician_name: string}>
+     * @return array<int, array{title: string, description: ?string, equipment_name: ?string, performed_at: ?Carbon, technician_name: string}>
      */
     public function getMaintenanceLog(?int $teamId, Carbon $startDate, Carbon $endDate): array
     {
         $workOrders = WorkOrder::query()
-            ->when($teamId, fn($q) => $q->where('team_id', $teamId))
+            ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
             ->whereNotNull('completed_at')
             ->whereNotNull('maintenance_schedule_id')
             ->where('completed_at', '>=', $startDate)
@@ -381,10 +367,7 @@ class MaintenanceReportService
      * has equipment attached; general CRM to-dos with no equipment_id never
      * show up in this report.
      *
-     * @param int|null $teamId
-     * @param Carbon $startDate
-     * @param Carbon $endDate
-     * @return array<int, array{title: string, description: ?string, equipment_name: ?string, performed_at: ?\Carbon\Carbon, technician_name: string}>
+     * @return array<int, array{title: string, description: ?string, equipment_name: ?string, performed_at: ?Carbon, technician_name: string}>
      */
     public function getUnplannedMaintenanceLog(?int $teamId, Carbon $startDate, Carbon $endDate): array
     {
@@ -419,13 +402,12 @@ class MaintenanceReportService
      * Unlike the completed-maintenance log, this isn't scoped to a date
      * range: overdue is inherently a snapshot of right now, not a period.
      *
-     * @param int|null $teamId
      * @return array<int, array{title: string, description: ?string, equipment_name: ?string, technician_name: string, overdue_summary: string}>
      */
     public function getOverdueMaintenance(?int $teamId = null): array
     {
         $schedules = MaintenanceSchedule::active()
-            ->when($teamId, fn($q) => $q->where('team_id', $teamId))
+            ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
             ->with(['equipment', 'assignedUser'])
             ->get()
             ->filter(fn (MaintenanceSchedule $schedule) => $schedule->isDue());
@@ -438,13 +420,13 @@ class MaintenanceReportService
                 // this reading", not a precise overdue start date.
                 $recordedAt = $schedule->equipment?->current_hours_recorded_at;
 
-                $overdueSummary = $schedule->hoursOverdueBy() . ' hours overdue'
-                    . ($recordedAt ? ' as of the reading on ' . $recordedAt->format('M j, Y') : '')
-                    . ' (currently at ' . $schedule->equipment?->current_hours . ' hrs; due every ' . $schedule->frequency_value . ' hrs)';
+                $overdueSummary = $schedule->hoursOverdueBy().' hours overdue'
+                    .($recordedAt ? ' as of the reading on '.$recordedAt->format('M j, Y') : '')
+                    .' (currently at '.$schedule->equipment?->current_hours.' hrs; due every '.$schedule->frequency_value.' hrs)';
             } else {
                 $daysOverdue = (int) $schedule->next_due_date->diffInDays(now());
-                $overdueSummary = 'Overdue since ' . $schedule->next_due_date->format('M j, Y')
-                    . ' (' . $daysOverdue . ' ' . str('day')->plural($daysOverdue) . ')';
+                $overdueSummary = 'Overdue since '.$schedule->next_due_date->format('M j, Y')
+                    .' ('.$daysOverdue.' '.str('day')->plural($daysOverdue).')';
             }
 
             return [
@@ -459,10 +441,7 @@ class MaintenanceReportService
 
     /**
      * Generate actionable insights based on data analysis
-     * 
-     * @param int|null $teamId
-     * @param Carbon $startDate
-     * @param Carbon $endDate
+     *
      * @return array List of insights
      */
     protected function generateActionableInsights(?int $teamId, Carbon $startDate, Carbon $endDate): array
@@ -471,25 +450,25 @@ class MaintenanceReportService
 
         // Check for high-cost equipment
         $equipmentMetrics = $this->getEquipmentPerformanceMetrics($teamId, $startDate, $endDate);
-        $highCostEquipment = array_filter($equipmentMetrics, fn($e) => $e['total_cost'] > 5000);
-        
+        $highCostEquipment = array_filter($equipmentMetrics, fn ($e) => $e['total_cost'] > 5000);
+
         if ($highCostEquipment !== []) {
             $insights[] = [
                 'type' => 'warning',
                 'category' => 'Cost Management',
-                'message' => count($highCostEquipment) . ' equipment items have exceeded $5,000 in maintenance costs.',
+                'message' => count($highCostEquipment).' equipment items have exceeded $5,000 in maintenance costs.',
                 'recommendation' => 'Consider evaluating replacement vs. repair costs for high-maintenance equipment.',
             ];
         }
 
         // Check for low uptime equipment
-        $lowUptimeEquipment = array_filter($equipmentMetrics, fn($e) => $e['uptime_percentage'] < 80);
-        
+        $lowUptimeEquipment = array_filter($equipmentMetrics, fn ($e) => $e['uptime_percentage'] < 80);
+
         if ($lowUptimeEquipment !== []) {
             $insights[] = [
                 'type' => 'critical',
                 'category' => 'Equipment Reliability',
-                'message' => count($lowUptimeEquipment) . ' equipment items have uptime below 80%.',
+                'message' => count($lowUptimeEquipment).' equipment items have uptime below 80%.',
                 'recommendation' => 'Implement preventive maintenance schedules to improve equipment availability.',
             ];
         }
@@ -507,7 +486,7 @@ class MaintenanceReportService
 
         // Check for overdue schedules
         $overdueCount = MaintenanceSchedule::query()
-            ->when($teamId, fn($q) => $q->where('team_id', $teamId))
+            ->when($teamId, fn ($q) => $q->where('team_id', $teamId))
             ->where('next_due_date', '<', now())
             ->where('status', 'active')
             ->count();
@@ -523,13 +502,13 @@ class MaintenanceReportService
 
         // Check technician workload
         $techMetrics = $this->getTechnicianPerformanceMetrics($teamId, $startDate, $endDate);
-        $overloadedTechs = array_filter($techMetrics, fn($t) => $t['completion_rate'] < 70 && $t['total_assigned'] > 5);
-        
+        $overloadedTechs = array_filter($techMetrics, fn ($t) => $t['completion_rate'] < 70 && $t['total_assigned'] > 5);
+
         if ($overloadedTechs !== []) {
             $insights[] = [
                 'type' => 'info',
                 'category' => 'Resource Management',
-                'message' => count($overloadedTechs) . ' technicians have completion rates below 70%.',
+                'message' => count($overloadedTechs).' technicians have completion rates below 70%.',
                 'recommendation' => 'Review workload distribution and consider additional training or resources.',
             ];
         }

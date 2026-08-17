@@ -2,6 +2,7 @@
 
 namespace App\Modules;
 
+use App\Models\Module;
 use App\Modules\Contracts\ModuleInterface;
 use Exception;
 use Illuminate\Support\Collection;
@@ -11,6 +12,20 @@ use Illuminate\Support\Facades\Log;
 
 class ModuleManager
 {
+    /**
+     * Subdirectories of app/Modules that belong to the module system itself
+     * rather than being modules. Without this they are treated as modules,
+     * fail to resolve a {Name}Module class, and log a warning on every
+     * discovery pass — four every ten seconds, which buried real errors and
+     * grew laravel.log to ~10MB.
+     */
+    private const RESERVED_DIRECTORIES = [
+        'Contracts',
+        'Events',
+        'Support',
+        'Traits',
+    ];
+
     protected Collection $modules;
 
     protected array $enabledModules = [];
@@ -66,12 +81,12 @@ class ModuleManager
         $module->enable();
 
         try {
-            $mdl              = \App\Models\Module::firstOrNew(['name' => $module->getName()]);
-            $mdl->enabled     = true;
-            $mdl->version     = $module->getVersion();
+            $mdl = Module::firstOrNew(['name' => $module->getName()]);
+            $mdl->enabled = true;
+            $mdl->version = $module->getVersion();
             $mdl->description = $module->getDescription();
             $mdl->dependencies = $module->getDependencies();
-            $mdl->config      = $module->getConfig();
+            $mdl->config = $module->getConfig();
             $mdl->save();
         } catch (\Throwable $e) {
             Log::warning("Failed to persist enabled state for module '{$name}': ".$e->getMessage());
@@ -97,7 +112,7 @@ class ModuleManager
         $module->disable();
 
         try {
-            $mdl          = \App\Models\Module::firstOrNew(['name' => $module->getName()]);
+            $mdl = Module::firstOrNew(['name' => $module->getName()]);
             $mdl->enabled = false;
             $mdl->save();
         } catch (\Throwable $e) {
@@ -159,12 +174,12 @@ class ModuleManager
         }
 
         return [
-            'name'         => $module->getName(),
-            'version'      => $module->getVersion(),
-            'description'  => $module->getDescription(),
+            'name' => $module->getName(),
+            'version' => $module->getVersion(),
+            'description' => $module->getDescription(),
             'dependencies' => $module->getDependencies(),
-            'enabled'      => $module->isEnabled(),
-            'config'       => $module->getConfig(),
+            'enabled' => $module->isEnabled(),
+            'config' => $module->getConfig(),
         ];
     }
 
@@ -185,11 +200,11 @@ class ModuleManager
         if (! $module instanceof ModuleInterface) {
             return [
                 'healthy' => false,
-                'errors'  => ['Module not found'],
+                'errors' => ['Module not found'],
             ];
         }
 
-        $errors   = [];
+        $errors = [];
         $warnings = [];
 
         $moduleClass = get_class($module);
@@ -211,8 +226,8 @@ class ModuleManager
         }
 
         return [
-            'healthy'  => empty($errors),
-            'errors'   => $errors,
+            'healthy' => empty($errors),
+            'errors' => $errors,
             'warnings' => $warnings,
         ];
     }
@@ -236,6 +251,10 @@ class ModuleManager
         $modulesPath = app_path('Modules');
         if (File::exists($modulesPath)) {
             foreach (File::directories($modulesPath) as $modulePath) {
+                if (in_array(basename($modulePath), self::RESERVED_DIRECTORIES, true)) {
+                    continue;
+                }
+
                 $this->loadModule(basename($modulePath), $modulePath);
             }
         }
@@ -293,13 +312,13 @@ class ModuleManager
         $this->register($module);
 
         try {
-            \App\Models\Module::updateOrCreate(
+            Module::updateOrCreate(
                 ['name' => $module->getName()],
                 [
-                    'version'      => $module->getVersion(),
-                    'description'  => $module->getDescription(),
+                    'version' => $module->getVersion(),
+                    'description' => $module->getDescription(),
                     'dependencies' => $module->getDependencies(),
-                    'config'       => $module->getConfig(),
+                    'config' => $module->getConfig(),
                 ]
             );
         } catch (\Throwable $e) {
@@ -309,7 +328,7 @@ class ModuleManager
 
     protected function loadModularModule(string $moduleName, string $modulePath): void
     {
-        $namespace   = config('modular.modules_namespace', 'Modules');
+        $namespace = config('modular.modules_namespace', 'Modules');
         $moduleClass = "{$namespace}\\{$moduleName}\\{$moduleName}Module";
 
         if (! class_exists($moduleClass)) {
@@ -327,12 +346,12 @@ class ModuleManager
 
                 public function __construct(string $moduleClass)
                 {
-                    $this->moduleClass    = $moduleClass;
+                    $this->moduleClass = $moduleClass;
                     $this->moduleInstance = class_exists($moduleClass) ? new $moduleClass : null;
 
                     try {
                         if ($this->moduleInstance && method_exists($this->moduleInstance, 'getName')) {
-                            $dbModule      = \App\Models\Module::where('name', $this->getName())->first();
+                            $dbModule = Module::where('name', $this->getName())->first();
                             $this->enabled = $dbModule ? (bool) $dbModule->enabled : false;
                         }
                     } catch (\Throwable) {
@@ -367,13 +386,25 @@ class ModuleManager
                     return '';
                 }
 
-                public function getDependencies(): array { return []; }
+                public function getDependencies(): array
+                {
+                    return [];
+                }
 
-                public function isEnabled(): bool { return $this->enabled; }
+                public function isEnabled(): bool
+                {
+                    return $this->enabled;
+                }
 
-                public function enable(): void { $this->enabled = true; }
+                public function enable(): void
+                {
+                    $this->enabled = true;
+                }
 
-                public function disable(): void { $this->enabled = false; }
+                public function disable(): void
+                {
+                    $this->enabled = false;
+                }
 
                 public function install(): void {}
 
@@ -388,13 +419,13 @@ class ModuleManager
             $this->register($module);
 
             try {
-                \App\Models\Module::updateOrCreate(
+                Module::updateOrCreate(
                     ['name' => $module->getName()],
                     [
-                        'version'      => $module->getVersion(),
-                        'description'  => $module->getDescription(),
+                        'version' => $module->getVersion(),
+                        'description' => $module->getDescription(),
                         'dependencies' => $module->getDependencies(),
-                        'config'       => $module->getConfig(),
+                        'config' => $module->getConfig(),
                     ]
                 );
             } catch (\Throwable $e) {
