@@ -114,8 +114,12 @@ services:
   mysql:
     image: mysql:8.0
     restart: unless-stopped
+    # Bound to loopback deliberately. The app reaches MySQL over the appnet bridge, so
+    # publishing on all interfaces buys nothing and exposes the database to anything that
+    # can reach the host — with the compose-default credentials below. On the GCP VM only
+    # the VPC firewall was standing in the way. Tunnel over SSH for a GUI client.
     ports:
-      - '${FORWARD_DB_PORT:-3306}:3306'
+      - '127.0.0.1:${FORWARD_DB_PORT:-3306}:3306'
     environment:
       MYSQL_ROOT_PASSWORD: '${DB_ROOT_PASSWORD:-secret}'
       MYSQL_DATABASE: '${DB_DATABASE:-liberu_maintenance}'
@@ -135,8 +139,10 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # Loopback-only for the same reason as MySQL above, and more urgently: this Redis
+    # has no password set at all, and it holds the session store.
     ports:
-      - '${FORWARD_REDIS_PORT:-6379}:6379'
+      - '127.0.0.1:${FORWARD_REDIS_PORT:-6379}:6379'
     volumes:
       - redis:/data
     networks:
