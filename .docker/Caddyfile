@@ -1,0 +1,27 @@
+{
+	# No public ACME issuer can sign for a bare IP address, so this deployment uses
+	# Caddy's internal CA (see `tls internal` below). Browsers will show a full-page
+	# certificate warning until the client trusts Caddy's root — extract it with:
+	#   docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .
+	# Swap `tls internal` for Caddy's default once a real hostname exists: point
+	# CADDY_SITE_ADDRESS at the domain, drop the `tls internal` line, and Caddy will
+	# obtain a Let's Encrypt certificate on its own.
+	email {$CADDY_EMAIL:admin@example.com}
+	admin off
+}
+
+{$CADDY_SITE_ADDRESS::443} {
+	tls internal
+
+	encode zstd gzip
+
+	# The app container no longer publishes :8000 to the host, so this reverse proxy
+	# is the only route in. That is what makes `trustProxies(at: '*')` in
+	# bootstrap/app.php honest — the only proxy that can reach the app is this one.
+	# X-Forwarded-Proto is what tells Laravel to generate https:// URLs, without which
+	# Livewire and Filament asset loading break under TLS.
+	reverse_proxy app:8000 {
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
+	}
+}

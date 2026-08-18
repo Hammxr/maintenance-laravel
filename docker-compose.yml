@@ -38,6 +38,31 @@ services:
       retries: 5
       start_period: 10s
 
+  # TLS termination and the only public entrypoint. Waits for the app to report
+  # healthy so it never proxies to a container that cannot serve — which is only
+  # meaningful now that the healthcheck makes a real request rather than checking
+  # that a process exists.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./.docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Persist the internal CA and issued certificates. Without these the root
+      # changes on every restart, so anyone who trusted it has to trust it again.
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      CADDY_SITE_ADDRESS: '${CADDY_SITE_ADDRESS:-:443}'
+      CADDY_EMAIL: '${CADDY_EMAIL:-admin@example.com}'
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - appnet
+
   horizon:
     build:
       context: .
@@ -176,4 +201,8 @@ volumes:
   storage:
     driver: local
   logs:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
     driver: local
