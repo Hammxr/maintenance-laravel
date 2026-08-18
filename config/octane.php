@@ -221,6 +221,12 @@ return [
     |
     */
 
-    'max_execution_time' => 30,
+    // 30s (the Octane default) is tight for this app: the Filament dashboard
+    // renders many widgets in one request, Blade views aren't pre-compiled at
+    // container start (only routes/config/events are), and PDF report export
+    // is already known to be slow enough elsewhere in this app that its
+    // memory limit had to be raised. Given as an env override rather than a
+    // fixed number so it can be tuned per-environment without a code change.
+    'max_execution_time' => (int) env('OCTANE_MAX_EXECUTION_TIME', 120),
 
 ];
