@@ -14,8 +14,28 @@ check_supervisor_process() {
     return 1
 }
 
+# Ask the app to serve an actual request rather than asking Octane whether its
+# process is alive. A RoadRunner worker that dies during framework boot — an empty
+# APP_KEY will do it — leaves the octane:start process running and happily reporting
+# itself up, while every request returns 500. That combination once kept this
+# container marked "healthy" through a total outage, so liveness of the supervisor
+# process is not evidence the app works. /up is Laravel's health route (registered in
+# bootstrap/app.php) and boots the framework without touching the database.
+check_http() {
+    local url="http://127.0.0.1:${OCTANE_PORT:-8000}/up"
+    local code
+    # Stay under the compose healthcheck timeout so a hung app fails the check
+    # rather than the check itself being killed with no diagnostic.
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 4 "${url}" 2>/dev/null)"
+    if [ "${code}" = "200" ]; then
+        return 0
+    fi
+    echo "Healthcheck failed: ${url} returned ${code:-no response}"
+    return 1
+}
+
 if [ "${container_mode}" = "http" ]; then
-    php "${ROOT}/artisan" octane:status
+    check_http
 elif [ "${container_mode}" = "horizon" ]; then
     php "${ROOT}/artisan" horizon:status
 elif [ "${container_mode}" = "reverb" ]; then
