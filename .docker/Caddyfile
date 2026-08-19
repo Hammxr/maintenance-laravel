@@ -23,10 +23,8 @@
 
 	encode zstd gzip
 
-	# NOTE: the app container still publishes :8000 to the host, so this proxy is not
-	# yet the only route in — which means `trustProxies(at: '*')` in bootstrap/app.php
-	# is still trusting headers from clients that bypass Caddy entirely. Stop
-	# publishing :8000 once HTTPS is confirmed working, and that comment becomes true.
+	# The app publishes :8000 on loopback only, so this proxy is the only route in from
+	# the network — which is what justifies `trustProxies(at: '*')` in bootstrap/app.php.
 	# X-Forwarded-Proto is what tells Laravel to generate https:// URLs, without which
 	# Livewire and Filament asset loading break under TLS.
 	reverse_proxy app:8000 {

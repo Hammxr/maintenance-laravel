@@ -9,9 +9,15 @@ services:
         GROUP_ID: '${GID:-1000}'
     image: liberu/maintenance:latest
     restart: unless-stopped
+    # Loopback-only: Caddy reaches the app over the appnet bridge, so nothing needs
+    # to publish these publicly. While :8000 was open to the internet it was a
+    # plaintext bypass around TLS — a login there crossed the network in the clear —
+    # and it let any client forge the X-Forwarded-* headers that trustProxies(at: '*')
+    # in bootstrap/app.php takes on faith. Kept bound to localhost so `docker compose
+    # up` still gives a developer http://localhost:8000 without a certificate warning.
     ports:
-      - '${APP_PORT:-8000}:8000'
-      - '${HEALTH_PORT:-8080}:8080'
+      - '127.0.0.1:${APP_PORT:-8000}:8000'
+      - '127.0.0.1:${HEALTH_PORT:-8080}:8080'
     environment:
       CONTAINER_MODE: http
       OCTANE_SERVER: '${OCTANE_SERVER:-roadrunner}'
