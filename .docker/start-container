@@ -15,6 +15,13 @@ initialStuff() {
     php "${ROOT}/artisan" event:cache
     php "${ROOT}/artisan" config:cache
     php "${ROOT}/artisan" route:cache
+    # Precompile Blade too. Until the AppLayout component was restored this aborted
+    # on <x-app-layout> and could not be enabled, so every view compiled on first
+    # request instead — part of why the Filament dashboard needed a raised Octane
+    # execution timeout. Note `set -e` above: a view that will not compile now stops
+    # the container from booting rather than degrading it, which matches how
+    # route:cache and config:cache already behave.
+    php "${ROOT}/artisan" view:cache
 
     if [ "${running_migrations}" = "true" ]; then
         echo "Running migrations and seeding database..."
