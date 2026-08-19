@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasTenants;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -19,7 +20,7 @@ use Laravel\Jetstream\HasTeams;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements HasTenants
+class User extends Authenticatable implements FilamentUser, HasTenants
 {
     use HasApiTokens;
     use HasConnectedAccounts;
@@ -100,6 +101,28 @@ class User extends Authenticatable implements HasTenants
      *
      * @return array<Model>|Collection
      */
+    /**
+     * Gate access to each Filament panel.
+     *
+     * Filament\Http\Middleware\Authenticate aborts with 403 whenever the user model
+     * does not implement FilamentUser and the environment is anything other than
+     * `local` — before permissions or tenancy are consulted. Without this method the
+     * panels were unreachable in production no matter how the roles were configured,
+     * and the failure surfaced as a bare 403 with nothing in the log.
+     *
+     * The app panel allows any authenticated user because it has registration
+     * enabled and is tenant-scoped, so a new account only ever sees its own team.
+     * The admin panel hosts Shield's role and permission management, so it is
+     * restricted to super_admin.
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return match ($panel->getId()) {
+            'admin' => $this->hasRole('super_admin'),
+            default => true,
+        };
+    }
+
     public function getTenants(Panel $panel): array | Collection
     {
         return $this->allTeams();
