@@ -8,7 +8,7 @@ return new class extends SettingsMigration
 {
     public function up(): void
     {
-        $this->migrator->add('general.site_name', config('app.name', 'Liberu Maintenance'));
+        $this->migrator->add('general.site_name', config('app.name', 'Republic Lifestyle'));
         $this->migrator->add('general.site_email', 'info@example.com');
         $this->migrator->add('general.site_phone', '');
         $this->migrator->add('general.site_address', '');
@@ -19,6 +19,6 @@ return new class extends SettingsMigration
         $this->migrator->add('general.twitter_url', null);
         $this->migrator->add('general.github_url', 'https://www.github.com/liberu-maintenance/maintenance-laravel');
         $this->migrator->add('general.youtube_url', null);
-        $this->migrator->add('general.footer_copyright', '© ' . date('Y') . ' ' . config('app.name', 'Liberu Maintenance') . '. All rights reserved.');
+        $this->migrator->add('general.footer_copyright', '© ' . date('Y') . ' ' . config('app.name', 'Republic Lifestyle') . '. All rights reserved.');
     }
 };

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ config('app.name', 'Liberu Maintenance') }}</title>
+    <title>{{ config('app.name', 'Republic Lifestyle') }}</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
@@ -38,7 +38,7 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 </svg>
                             </a>
-                            <span class="ml-2 text-xl font-bold text-gray-900">Liberu Maintenance</span>
+                            <span class="ml-2 text-xl font-bold text-gray-900">Republic Lifestyle</span>
                         </div>
                     </div>
 

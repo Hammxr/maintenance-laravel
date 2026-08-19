@@ -6,7 +6,7 @@ metadata:
   labels:
     app: liberu-maintenance
 data:
-  APP_NAME: "Liberu Maintenance"
+  APP_NAME: "Republic Lifestyle"
   APP_ENV: "production"
   APP_DEBUG: "false"
   LOG_CHANNEL: "stack"
