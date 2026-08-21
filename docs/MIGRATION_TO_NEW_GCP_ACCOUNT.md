@@ -1,8 +1,15 @@
 # Migrating the deployment to another GCP account
 
-Moves the running deployment from GCP project `republic-pms` (instance `maintenance-app`,
-zone `africa-south1-a`, IP `34.35.38.52`) onto a new VM in a different Google Cloud
-account, and switches TLS from Caddy's internal CA to a real certificate for a domain.
+Moves the running deployment onto a new VM in a different Google Cloud account, and switches
+TLS from Caddy's internal CA to a real certificate for a domain.
+
+This repository is public, so the source project's identifiers are deliberately not written
+down here. Read them from the environment you are migrating away from:
+
+```bash
+gcloud config get-value project
+gcloud compute instances list
+```
 
 The companion document [DEPLOYMENT_GCP_VM.md](DEPLOYMENT_GCP_VM.md) covers a first-time
 build in more detail. This one only covers what differs when moving an existing install.
