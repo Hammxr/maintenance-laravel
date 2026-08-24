@@ -84,7 +84,8 @@ gcloud compute instances create maintenance-app \
   --image-family=debian-12 \
   --image-project=debian-cloud \
   --boot-disk-size=50GB \
-  --address=maintenance-ip
+  --address=maintenance-ip \
+  --scopes=https://www.googleapis.com/auth/devstorage.read_write,https://www.googleapis.com/auth/logging.write,https://www.googleapis.com/auth/monitoring.write
 
 gcloud compute firewall-rules create allow-http-https \
   --allow=tcp:80,tcp:443 \
@@ -95,6 +96,12 @@ gcloud compute firewall-rules create allow-http-https \
 **Port 22 is deliberately not opened.** `gcloud compute ssh` reaches the instance through
 IAP/OS Login without an inbound SSH rule, and that is how the old deployment is
 administered. Do not add one.
+
+The `--scopes` flag matters and is easy to leave off. Access scopes are set **at instance
+creation** and gate what the VM's service account may do regardless of the IAM roles granted
+to it — so a backup script can hold `roles/storage.objectCreator` and still be refused when
+it tries to upload. Changing scopes later means stopping the instance. Setting them now
+avoids discovering this the first night the backup cron runs.
 
 Do not publish 3306, 6379 or 8000 either — `docker-compose.yml` already binds those to
 `127.0.0.1`, and Caddy is the only public entrypoint.
@@ -241,7 +248,65 @@ Expect `production`, Debug `OFF`, and Config/Routes/Events/Views all `CACHED`.
 Then log in and check permissions resolved — an immediate 403 after a successful login
 means the permissions table is empty. See below.
 
-## 8. Decommission the old VM
+## 8. Set up backups — before any real data exists
+
+The original deployment ran for weeks with **no backups of any kind**: no disk snapshots, no
+snapshot schedule, no database dumps. That was survivable only because the database was
+empty. The moment real equipment, schedules and work-order history exist, a single VM is a
+single point of total loss. Do this while it still costs nothing to get wrong.
+
+### Boot disk snapshots
+
+Covers the whole machine — database volume, uploaded documents and configuration in one
+artefact, and the fastest way back from a VM that will not boot.
+
+```bash
+gcloud compute resource-policies create snapshot-schedule maintenance-daily \
+  --region=africa-south1 \
+  --daily-schedule \
+  --start-time=23:00 \
+  --max-retention-days=14 \
+  --on-source-disk-delete=keep-auto-snapshots
+
+gcloud compute disks add-resource-policies maintenance-app \
+  --zone=africa-south1-a \
+  --resource-policies=maintenance-daily
+```
+
+`--on-source-disk-delete=keep-auto-snapshots` is deliberate: without it, deleting the
+instance takes its snapshots with it, which is precisely when you are most likely to need
+them.
+
+### Database dumps
+
+Snapshots are crash recovery, not data recovery — restoring one to retrieve a single
+mistakenly deleted record means standing up a whole VM. Nightly logical dumps give you a
+file you can inspect and restore selectively.
+
+Follow **Phase 5.1** of [DEPLOYMENT_GCP_VM.md](DEPLOYMENT_GCP_VM.md#51-database-backups-to-cloud-storage),
+which has the bucket, the script and the cron entry. Two things to carry over with it:
+
+- Grant the VM's service account `roles/storage.objectCreator` on the bucket **and** confirm
+  the instance carries the storage scope from section 2 above. Both are required; either one
+  alone fails.
+- Back up the `storage` volume too. Uploaded manuals and documents live there, not in the
+  database, so a database-only backup silently loses them.
+
+### Prove it works
+
+A backup that has never been restored is a hypothesis. Before trusting it:
+
+```bash
+# take a dump, then restore it into a throwaway database and count rows
+sudo docker compose exec -T mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE restore_test"'
+gunzip -c /tmp/db-STAMP.sql.gz | sudo docker compose exec -T mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" restore_test'
+sudo docker compose exec -T mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" restore_test -e "SELECT COUNT(*) FROM equipment"'
+sudo docker compose exec -T mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "DROP DATABASE restore_test"'
+```
+
+Restoring alongside the live database rather than over it means a failed test costs nothing.
+
+## 9. Decommission the old VM
 
 Only after the new deployment has served real traffic for a day or two:
 
